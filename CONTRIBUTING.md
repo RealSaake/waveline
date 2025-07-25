@@ -6,8 +6,8 @@ Thanks for your interest in contributing! This project thrives on community cont
 
 1. **Fork & Clone**
    ```bash
-   git clone https://github.com/yourusername/spotify-visualizer
-   cd spotify-visualizer
+   git clone https://github.com/RealSaake/waveline
+   cd waveline
    npm install
    ```
 
@@ -122,8 +122,8 @@ Contributors will be:
 
 ## 📞 Get Help
 
-- 💬 [GitHub Discussions](https://github.com/yourusername/spotify-visualizer/discussions)
-- 🐛 [Issues](https://github.com/yourusername/spotify-visualizer/issues)
+- 💬 [GitHub Discussions](https://github.com/RealSaake/waveline/discussions)
+- 🐛 [Issues](https://github.com/RealSaake/waveline/issues)
 - 📧 Email: your-email@example.com
 
 ---

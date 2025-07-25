@@ -11,8 +11,8 @@ Get your Spotify Visualizer running in 5 minutes!
 ## 1. Clone & Install
 
 ```bash
-git clone https://github.com/yourusername/spotify-visualizer
-cd spotify-visualizer
+git clone https://github.com/RealSaake/waveline
+cd waveline
 npm install
 ```
 
@@ -61,12 +61,23 @@ For the best experience with real-time audio visualization:
 ## 🔧 Production Deployment
 
 ### Vercel (Recommended)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/spotify-visualizer)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/RealSaake/waveline)
 
-1. Connect your GitHub repo to Vercel
-2. Add environment variables in Vercel dashboard
-3. Update Spotify app redirect URI to your domain
-4. Deploy!
+1. **Connect GitHub** - Link your forked repo to Vercel
+2. **Environment Variables** - Add these in Vercel dashboard:
+   ```
+   SPOTIFY_CLIENT_ID=your_client_id_here
+   SPOTIFY_CLIENT_SECRET=your_client_secret_here
+   NEXTAUTH_URL=https://your-app.vercel.app
+   NEXTAUTH_SECRET=your_random_secret_here
+   ```
+3. **Update Spotify App** - In Spotify Developer Dashboard:
+   - Website: `https://your-app.vercel.app`
+   - Redirect URIs: `https://your-app.vercel.app/callback`
+4. **Deploy** - Vercel will auto-deploy on push!
+
+### Live Example
+🎵 **[waveline.vercel.app](https://waveline.vercel.app)** - See it in action!
 
 ### Other Platforms
 Works on any platform supporting Next.js:
@@ -102,8 +113,8 @@ Want to add your own visualization? Check out:
 
 ## 📞 Need Help?
 
-- 🐛 [Report Issues](https://github.com/yourusername/spotify-visualizer/issues)
-- 💬 [Discussions](https://github.com/yourusername/spotify-visualizer/discussions)
+- 🐛 [Report Issues](https://github.com/RealSaake/waveline/issues)
+- 💬 [Discussions](https://github.com/RealSaake/waveline/discussions)
 - 📧 Email: your-email@example.com
 
 ---
