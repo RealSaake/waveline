@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
     // Get audio features for the current track
     let audioFeatures = null;
     try {
+      console.log('Fetching audio features for track:', currentlyPlaying.item.id);
       const audioFeaturesResponse = await fetch(
         `https://api.spotify.com/v1/audio-features/${currentlyPlaying.item.id}`,
         {
@@ -47,11 +48,17 @@ export async function GET(request: NextRequest) {
         }
       );
 
+      console.log('Audio features response status:', audioFeaturesResponse.status);
+      
       if (audioFeaturesResponse.ok) {
         audioFeatures = await audioFeaturesResponse.json();
+        console.log('Audio features received:', audioFeatures);
+      } else {
+        const errorText = await audioFeaturesResponse.text();
+        console.error('Audio features error:', audioFeaturesResponse.status, errorText);
       }
     } catch (error) {
-      console.warn('Failed to get audio features:', error);
+      console.error('Failed to get audio features:', error);
     }
 
     return NextResponse.json({

@@ -36,7 +36,7 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number | undefined>();
+  const animationRef = useRef<number | undefined>(undefined);
 
   // Poll for currently playing track
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
 
   // Canvas visualization
   useEffect(() => {
-    if (!audioFeatures || !isPlaying) return;
+    if (!isPlaying) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -90,16 +90,28 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Use audio features if available, otherwise use defaults
+      const features = audioFeatures || {
+        energy: 0.7,
+        valence: 0.5,
+        tempo: 120,
+        danceability: 0.6,
+        acousticness: 0.3,
+        instrumentalness: 0.1,
+        liveness: 0.2,
+        speechiness: 0.1
+      };
+
       // Create gradient background based on valence
       const gradient = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, 0,
         canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
       );
 
-      if (audioFeatures.valence > 0.7) {
+      if (features.valence > 0.7) {
         gradient.addColorStop(0, `hsla(60, 80%, 60%, 0.3)`); // Happy - yellow
         gradient.addColorStop(1, `hsla(120, 60%, 40%, 0.1)`); // Green
-      } else if (audioFeatures.valence > 0.4) {
+      } else if (features.valence > 0.4) {
         gradient.addColorStop(0, `hsla(240, 80%, 60%, 0.3)`); // Neutral - blue
         gradient.addColorStop(1, `hsla(280, 60%, 40%, 0.1)`); // Purple
       } else {
@@ -117,18 +129,18 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
 
       for (let i = 0; i < numBars; i++) {
         const frequency = i / numBars;
-        const amplitude = audioFeatures.energy * 0.8 +
-          Math.sin(time * audioFeatures.tempo / 60 + frequency * 10) * 0.3 +
-          Math.sin(time * 2 + frequency * 20) * audioFeatures.danceability * 0.2;
+        const amplitude = features.energy * 0.8 +
+          Math.sin(time * features.tempo / 60 + frequency * 10) * 0.3 +
+          Math.sin(time * 2 + frequency * 20) * features.danceability * 0.2;
 
         const barHeight = Math.max(10, amplitude * canvas.height * 0.6);
         const x = i * barWidth;
         const y = canvas.height - barHeight;
 
         // Color based on frequency and valence
-        const hue = (frequency * 360 + audioFeatures.valence * 60) % 360;
-        const saturation = 70 + audioFeatures.energy * 30;
-        const lightness = 50 + audioFeatures.danceability * 30;
+        const hue = (frequency * 360 + features.valence * 60) % 360;
+        const saturation = 70 + features.energy * 30;
+        const lightness = 50 + features.danceability * 30;
 
         ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.8)`;
         ctx.fillRect(x, y, barWidth - 1, barHeight);
@@ -143,11 +155,11 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
       // Draw central circle that pulses with tempo
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
-      const pulseRadius = 100 + Math.sin(time * audioFeatures.tempo / 30) * 50 * audioFeatures.energy;
+      const pulseRadius = 100 + Math.sin(time * features.tempo / 30) * 50 * features.energy;
 
       const circleGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, pulseRadius);
-      circleGradient.addColorStop(0, `hsla(${audioFeatures.valence * 120}, 80%, 70%, 0.6)`);
-      circleGradient.addColorStop(1, `hsla(${audioFeatures.valence * 120}, 80%, 70%, 0)`);
+      circleGradient.addColorStop(0, `hsla(${features.valence * 120}, 80%, 70%, 0.6)`);
+      circleGradient.addColorStop(1, `hsla(${features.valence * 120}, 80%, 70%, 0)`);
 
       ctx.fillStyle = circleGradient;
       ctx.beginPath();
@@ -164,7 +176,7 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [audioFeatures, isPlaying]);
+  }, [audioFeatures, isPlaying, currentTrack]);
 
   const toggleFullscreen = () => {
     if (!isFullscreen) {
@@ -224,26 +236,34 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
               </div>
 
               {/* Audio Features */}
-              {audioFeatures && (
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-gray-400">Energy</div>
-                    <div className="font-bold">{Math.round(audioFeatures.energy * 100)}%</div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {audioFeatures ? (
+                  <>
+                    <div>
+                      <div className="text-gray-400">Energy</div>
+                      <div className="font-bold">{Math.round(audioFeatures.energy * 100)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Mood</div>
+                      <div className="font-bold">{Math.round(audioFeatures.valence * 100)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Tempo</div>
+                      <div className="font-bold">{Math.round(audioFeatures.tempo)} BPM</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Dance</div>
+                      <div className="font-bold">{Math.round(audioFeatures.danceability * 100)}%</div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="col-span-2 text-center">
+                    <div className="text-yellow-400 text-xs">
+                      🎵 Using default visualization
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-gray-400">Mood</div>
-                    <div className="font-bold">{Math.round(audioFeatures.valence * 100)}%</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400">Tempo</div>
-                    <div className="font-bold">{Math.round(audioFeatures.tempo)} BPM</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400">Dance</div>
-                    <div className="font-bold">{Math.round(audioFeatures.danceability * 100)}%</div>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Controls */}
               <div className="flex gap-2">
