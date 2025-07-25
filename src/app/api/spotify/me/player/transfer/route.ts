@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthCookie, refreshSpotifyToken, setAuthCookie, clearAuthCookie } from '@/lib/auth';
 
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    let tokens = await getAuthCookie();
     
-    if (!session?.accessToken) {
+    if (!tokens) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check if token is expired and refresh if needed
+    if (Date.now() >= tokens.expires_at) {
+      const refreshedTokens = await refreshSpotifyToken(tokens.refresh_token);
+      
+      if (!refreshedTokens) {
+        await clearAuthCookie();
+        return NextResponse.json({ error: 'Token expired and refresh failed' }, { status: 401 });
+      }
+      
+      tokens = refreshedTokens;
+      await setAuthCookie(tokens);
     }
 
     const body = await request.json();
@@ -20,7 +32,7 @@ export async function PUT(request: NextRequest) {
     const response = await fetch('https://api.spotify.com/v1/me/player', {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${session.accessToken}`,
+        'Authorization': `Bearer ${tokens.access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
