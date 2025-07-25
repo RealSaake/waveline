@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import SpotifyAuth from '@/components/SpotifyAuth';
-import InstantVisualizer from '@/components/InstantVisualizer';
+import HybridVisualizer from '@/components/HybridVisualizer';
 
 export default function LivePage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -25,5 +25,5 @@ export default function LivePage() {
     return <SpotifyAuth onAuthSuccess={handleAuthSuccess} />;
   }
 
-  return <InstantVisualizer accessToken={accessToken} />;
+  return <HybridVisualizer accessToken={accessToken} />;
 }
