@@ -61,6 +61,7 @@ export default function Home() {
             
             <Link 
               href="/upload" 
+              prefetch={false}
               className="px-12 py-6 bg-white/10 hover:bg-white/20 backdrop-blur-lg text-white font-bold text-xl rounded-2xl border border-white/20 transition-all transform hover:scale-105"
             >
               📁 Upload Audio

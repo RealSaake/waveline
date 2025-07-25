@@ -3,6 +3,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer';
+import GenerativeVisualizer from './GenerativeVisualizer';
+import SmartLightsSettings from './SmartLightsSettings';
+import { smartLights } from '@/lib/smartLights';
 
 interface TrackInfo {
   energy?: number;
@@ -12,6 +15,17 @@ interface TrackInfo {
   genre?: string;
   mood?: string;
   description?: string;
+  visualDNA?: {
+    primaryColor: string;
+    secondaryColor: string;
+    accentColor: string;
+    particleShape: string;
+    particleSpeed: number;
+    particleSize: number;
+    flowPattern: string;
+    complexity: number;
+    brightness: number;
+  };
 }
 
 export default function MainVisualizer() {
@@ -29,7 +43,7 @@ export default function MainVisualizer() {
   } = useSpotifyPlayer();
 
   const [trackInfo, setTrackInfo] = useState<TrackInfo | null>(null);
-  const [visualMode, setVisualMode] = useState<'kaleidoscope' | 'neural' | 'plasma' | 'fractal' | 'liquid'>('kaleidoscope');
+  const [visualMode, setVisualMode] = useState<'generative' | 'kaleidoscope' | 'neural' | 'plasma' | 'fractal' | 'liquid'>('generative');
   const [showSettings, setShowSettings] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -94,22 +108,25 @@ export default function MainVisualizer() {
       const audioData = generateAudioData();
 
       // Draw visualization
-      switch (visualMode) {
-        case 'kaleidoscope':
-          drawKaleidoscope(ctx, canvas, audioData);
-          break;
-        case 'neural':
-          drawNeural(ctx, canvas, audioData);
-          break;
-        case 'plasma':
-          drawPlasma(ctx, canvas, audioData);
-          break;
-        case 'fractal':
-          drawFractal(ctx, canvas, audioData);
-          break;
-        case 'liquid':
-          drawLiquid(ctx, canvas, audioData);
-          break;
+      // Only draw canvas-based visualizations for non-generative modes
+      if (visualMode !== 'generative') {
+        switch (visualMode) {
+          case 'kaleidoscope':
+            drawKaleidoscope(ctx, canvas, audioData);
+            break;
+          case 'neural':
+            drawNeural(ctx, canvas, audioData);
+            break;
+          case 'plasma':
+            drawPlasma(ctx, canvas, audioData);
+            break;
+          case 'fractal':
+            drawFractal(ctx, canvas, audioData);
+            break;
+          case 'liquid':
+            drawLiquid(ctx, canvas, audioData);
+            break;
+        }
       }
 
       animationRef.current = requestAnimationFrame(animate);
@@ -452,13 +469,27 @@ export default function MainVisualizer() {
 
   return (
     <div className="relative min-h-screen bg-black overflow-hidden">
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      {/* Canvas-based visualizations */}
+      {visualMode !== 'generative' && (
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      )}
+      
+      {/* AI-Powered Generative Visualizer */}
+      {visualMode === 'generative' && trackInfo?.visualDNA && (
+        <GenerativeVisualizer 
+          audioData={audioData}
+          visualDNA={trackInfo.visualDNA}
+          width={typeof window !== 'undefined' ? window.innerWidth : 1920}
+          height={typeof window !== 'undefined' ? window.innerHeight : 1080}
+        />
+      )}
 
       {/* Simple Controls */}
       <div className="absolute top-6 left-6 right-6 flex justify-between items-center">
         {/* Visual Modes */}
         <div className="flex gap-2 bg-black/30 backdrop-blur-md rounded-full p-1">
           {[
+            { mode: 'generative', icon: '🧬', label: 'AI Visual DNA' },
             { mode: 'kaleidoscope', icon: '🔮', label: 'Kaleidoscope' },
             { mode: 'neural', icon: '🧠', label: 'Neural Network' },
             { mode: 'plasma', icon: '⚡', label: 'Plasma Field' },
@@ -493,28 +524,36 @@ export default function MainVisualizer() {
       </div>
 
       {/* Player */}
-      <div className="absolute bottom-6 left-6 right-6">
-        <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-4 border border-white/10">
-          <div className="flex items-center gap-4">
-            <img
-              src={currentTrack.album.images[0]?.url}
-              alt={currentTrack.album.name}
-              className="w-12 h-12 rounded-lg"
-            />
-            <div className="flex-1 min-w-0">
-              <h3 className="text-white font-semibold truncate">{currentTrack.name}</h3>
-              <p className="text-gray-300 text-sm truncate">{currentTrack.artists.map(a => a.name).join(', ')}</p>
-            </div>
+      {currentTrack && (
+        <div className="absolute bottom-6 left-6 right-6">
+          <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-4 border border-white/10">
+            <div className="flex items-center gap-4">
+              <img
+                src={currentTrack.image || '/placeholder-album.png'}
+                alt={currentTrack.album}
+                className="w-12 h-12 rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/placeholder-album.png';
+                }}
+              />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-white font-semibold truncate">{currentTrack.name}</h3>
+                <p className="text-gray-300 text-sm truncate">
+                  {Array.isArray(currentTrack.artists) 
+                    ? currentTrack.artists.join(', ') 
+                    : currentTrack.artists || 'Unknown Artist'}
+                </p>
+              </div>
             
             {/* Controls */}
             <div className="flex items-center gap-3">
-              <button onClick={prevTrack} className="text-white/70 hover:text-white transition-colors">
+              <button onClick={skipToPrevious} className="text-white/70 hover:text-white transition-colors">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
                 </svg>
               </button>
               
-              <button onClick={togglePlay} className="p-2 bg-white/20 hover:bg-white/30 rounded-full text-white transition-colors">
+              <button onClick={togglePlayback} className="p-2 bg-white/20 hover:bg-white/30 rounded-full text-white transition-colors">
                 {isPlaying ? (
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
@@ -526,7 +565,7 @@ export default function MainVisualizer() {
                 )}
               </button>
               
-              <button onClick={nextTrack} className="text-white/70 hover:text-white transition-colors">
+              <button onClick={skipToNext} className="text-white/70 hover:text-white transition-colors">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
                 </svg>
@@ -543,7 +582,7 @@ export default function MainVisualizer() {
                   max="1"
                   step="0.1"
                   value={volume}
-                  onChange={(e) => setPlayerVolume(parseFloat(e.target.value))}
+                  onChange={(e) => setVolume(parseFloat(e.target.value))}
                   className="w-24 h-1 bg-white/20 rounded-lg appearance-none slider cursor-pointer"
                 />
                 <span className="text-xs text-white/50 w-8">{Math.round(volume * 100)}%</span>
@@ -556,12 +595,17 @@ export default function MainVisualizer() {
             <div className="w-full bg-white/10 rounded-full h-1">
               <div
                 className="bg-gradient-to-r from-purple-400 to-pink-400 rounded-full h-1 transition-all duration-1000"
-                style={{ width: `${(currentTrack.progress_ms / currentTrack.duration_ms) * 100}%` }}
+                style={{ 
+                  width: `${currentTrack.progress_ms && currentTrack.duration_ms 
+                    ? (currentTrack.progress_ms / currentTrack.duration_ms) * 100 
+                    : 0}%` 
+                }}
               />
             </div>
           </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Settings Panel */}
       <AnimatePresence>

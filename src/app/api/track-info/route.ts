@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
     const { trackName, artists, album } = await request.json();
 
-    const prompt = `You are a music expert. Analyze this song and provide ONLY a JSON response with accurate data:
+    const prompt = `You are a music expert and visual artist. Analyze this song and provide ONLY a JSON response with accurate data including a unique visual DNA:
 
 Song: "${trackName}" by ${artists}
 Album: ${album}
@@ -23,10 +23,21 @@ Return ONLY this JSON format (no other text):
   "danceability": [0.0-1.0 based on rhythm/beat],
   "genre": "[specific genre like 'Pop', 'Hip-Hop', 'Rock', etc.]",
   "mood": "[one word: 'Energetic', 'Melancholic', 'Upbeat', 'Chill', etc.]",
-  "description": "[2-3 words describing the vibe like 'Dark electronic beats' or 'Uplifting pop anthem']"
+  "description": "[2-3 words describing the vibe like 'Dark electronic beats' or 'Uplifting pop anthem']",
+  "visualDNA": {
+    "primaryColor": "[hex color that matches the song's energy, like '#ff6b6b' for energetic or '#4ecdc4' for chill]",
+    "secondaryColor": "[complementary hex color]",
+    "accentColor": "[vibrant accent hex color]",
+    "particleShape": "[circle, triangle, square, star, or hexagon based on genre/mood]",
+    "particleSpeed": [0.1-2.0 based on tempo and energy],
+    "particleSize": [0.5-3.0 based on intensity],
+    "flowPattern": "[radial, spiral, wave, explosion, or organic based on song structure]",
+    "complexity": [1-10 based on musical complexity],
+    "brightness": [0.3-1.0 based on valence and energy]
+  }
 }
 
-Be specific and accurate. No generic responses.`;
+Be specific and accurate. Create a unique visual identity for this exact song.`;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
@@ -69,7 +80,18 @@ Be specific and accurate. No generic responses.`;
       danceability: Math.max(0, Math.min(1, trackInfo.danceability || 0.7)),
       genre: trackInfo.genre || 'Unknown',
       mood: trackInfo.mood || 'Energetic',
-      description: trackInfo.description || 'A great track'
+      description: trackInfo.description || 'A great track',
+      visualDNA: {
+        primaryColor: trackInfo.visualDNA?.primaryColor || '#6366f1',
+        secondaryColor: trackInfo.visualDNA?.secondaryColor || '#8b5cf6',
+        accentColor: trackInfo.visualDNA?.accentColor || '#f59e0b',
+        particleShape: trackInfo.visualDNA?.particleShape || 'circle',
+        particleSpeed: Math.max(0.1, Math.min(2.0, trackInfo.visualDNA?.particleSpeed || 1.0)),
+        particleSize: Math.max(0.5, Math.min(3.0, trackInfo.visualDNA?.particleSize || 1.5)),
+        flowPattern: trackInfo.visualDNA?.flowPattern || 'radial',
+        complexity: Math.max(1, Math.min(10, trackInfo.visualDNA?.complexity || 5)),
+        brightness: Math.max(0.3, Math.min(1.0, trackInfo.visualDNA?.brightness || 0.8))
+      }
     };
 
     return NextResponse.json(sanitizedInfo);
@@ -85,7 +107,18 @@ Be specific and accurate. No generic responses.`;
       danceability: 0.7,
       genre: 'Unknown',
       mood: 'Energetic',
-      description: 'A great track with good vibes'
+      description: 'A great track with good vibes',
+      visualDNA: {
+        primaryColor: '#6366f1',
+        secondaryColor: '#8b5cf6',
+        accentColor: '#f59e0b',
+        particleShape: 'circle',
+        particleSpeed: 1.0,
+        particleSize: 1.5,
+        flowPattern: 'radial',
+        complexity: 5,
+        brightness: 0.8
+      }
     });
   }
 }
