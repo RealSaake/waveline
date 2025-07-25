@@ -116,6 +116,7 @@ export function useSpotifyPlayer() {
   const playerRef = useRef<SpotifyPlayer | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const sdkLoadedRef = useRef<boolean>(false);
+  const deviceIdRef = useRef<string | null>(null);
 
   // Fetch current track from Spotify API
   const fetchCurrentTrack = useCallback(async () => {
@@ -223,16 +224,54 @@ export function useSpotifyPlayer() {
     }
   }, []);
 
+  // Transfer playback to Web Playback SDK device
+  const transferPlaybackToDevice = useCallback(async (deviceId: string) => {
+    try {
+      console.log('Transferring playback to device:', deviceId);
+      
+      const response = await fetch('/api/spotify/me/player/transfer', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          device_ids: [deviceId],
+          play: true,
+        }),
+      });
+
+      if (response.ok || response.status === 204) {
+        console.log('Playback transferred successfully to Web Playback SDK');
+        setState(prev => ({ ...prev, error: null }));
+        return true;
+      } else {
+        console.error('Failed to transfer playback:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error transferring playback:', error);
+      return false;
+    }
+  }, []);
+
   // User-triggered audio activation
   const activateAudio = useCallback(async () => {
     console.log('User activated audio - initializing audio context...');
     await initializeAudioContext();
     
+    // If we have a device ID but haven't transferred playback yet, do it now
+    if (deviceIdRef.current) {
+      const transferred = await transferPlaybackToDevice(deviceIdRef.current);
+      if (transferred) {
+        console.log('Playback transferred - Web Playback SDK controls now active!');
+      }
+    }
+    
     // Try to connect to existing player if available
     if (playerRef.current) {
       setTimeout(() => connectAudioAnalyser(playerRef.current!), 500);
     }
-  }, [initializeAudioContext]);
+  }, [initializeAudioContext, transferPlaybackToDevice]);
 
   // Connect Spotify player to Web Audio API
   const connectAudioAnalyser = useCallback(async (player?: SpotifyPlayer) => {
@@ -376,9 +415,16 @@ export function useSpotifyPlayer() {
       });
 
       // Player event listeners
-      player.addListener('ready', ({ device_id }) => {
+      player.addListener('ready', async ({ device_id }) => {
         console.log('Spotify player ready with device ID:', device_id);
+        deviceIdRef.current = device_id;
         setState(prev => ({ ...prev, isConnected: true, error: null }));
+        
+        // Transfer playback to this device to make SDK controls work instantly
+        const transferred = await transferPlaybackToDevice(device_id);
+        if (transferred) {
+          console.log('Web Playback SDK is now the active device - instant controls enabled!');
+        }
         
         // Only try to connect audio if audio context is already ready (user has interacted)
         if (audioContextRef.current && state.audioContextReady) {
@@ -570,8 +616,9 @@ export function useSpotifyPlayer() {
   // Control playback - prefer Web Playback SDK, fallback to API
   const togglePlayback = useCallback(async () => {
     try {
-      if (playerRef.current) {
-        // Use Web Playback SDK
+      if (playerRef.current && deviceIdRef.current) {
+        // Use Web Playback SDK (instant)
+        console.log('Using Web Playback SDK for instant playback control');
         await playerRef.current.togglePlay();
       } else {
         // Fallback to Spotify API
@@ -598,42 +645,43 @@ export function useSpotifyPlayer() {
       const clampedVolume = Math.max(0, Math.min(1, volume));
       const volumePercent = Math.round(clampedVolume * 100);
       
-      // Use Spotify API (more reliable than Web Playback SDK for volume)
-      console.log(`Setting volume to ${volumePercent}% via API`);
+      // Try Web Playback SDK first (instant, no network delay)
+      if (playerRef.current && deviceIdRef.current) {
+        try {
+          console.log(`Setting volume to ${volumePercent}% via Web Playback SDK (instant)`);
+          await playerRef.current.setVolume(clampedVolume);
+          setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
+          console.log(`Volume set instantly to ${volumePercent}%`);
+          return;
+        } catch (sdkError) {
+          console.warn('Web Playback SDK volume failed, falling back to API:', sdkError);
+        }
+      }
+      
+      // Fallback to Spotify API (has network delay)
+      console.log(`Setting volume to ${volumePercent}% via API (fallback)`);
       const response = await fetch(`/api/spotify/me/player/volume?volume_percent=${volumePercent}`, {
         method: 'PUT',
       });
 
       if (response.ok || response.status === 204) {
         setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
-        console.log(`Volume set successfully to ${volumePercent}%`);
+        console.log(`Volume set successfully to ${volumePercent}% via API`);
       } else {
         console.error(`Volume API failed with status ${response.status}:`, await response.text());
-        // If API fails, try Web Playback SDK as fallback
-        if (playerRef.current) {
-          console.log('Trying Web Playback SDK volume control as fallback');
-          await playerRef.current.setVolume(clampedVolume);
-          setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
-        }
+        setState(prev => ({ ...prev, error: 'Volume control unavailable' }));
       }
     } catch (error) {
       console.warn('Volume control unavailable:', error);
-      // Try Web Playback SDK as last resort
-      try {
-        if (playerRef.current) {
-          await playerRef.current.setVolume(clampedVolume);
-          setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
-        }
-      } catch (sdkError) {
-        console.warn('Web Playback SDK volume control also failed:', sdkError);
-      }
+      setState(prev => ({ ...prev, error: 'Volume control unavailable' }));
     }
   }, []);
 
   const skipToNext = useCallback(async () => {
     try {
-      if (playerRef.current) {
-        // Use Web Playback SDK
+      if (playerRef.current && deviceIdRef.current) {
+        // Use Web Playback SDK (instant)
+        console.log('Using Web Playback SDK for instant track skip');
         await playerRef.current.nextTrack();
       } else {
         // Fallback to Spotify API
@@ -652,8 +700,9 @@ export function useSpotifyPlayer() {
 
   const skipToPrevious = useCallback(async () => {
     try {
-      if (playerRef.current) {
-        // Use Web Playback SDK
+      if (playerRef.current && deviceIdRef.current) {
+        // Use Web Playback SDK (instant)
+        console.log('Using Web Playback SDK for instant previous track');
         await playerRef.current.previousTrack();
       } else {
         // Fallback to Spotify API
