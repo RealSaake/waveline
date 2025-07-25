@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import SpotifyAuth from '@/components/SpotifyAuth';
-import InstantVisualizer from '@/components/InstantVisualizer';
+import CleanVisualizer from '@/components/CleanVisualizer';
 import DebugPanel from '@/components/DebugPanel';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
@@ -41,7 +41,7 @@ export default function LivePage() {
         </button>
       </div>
       
-      <InstantVisualizer accessToken={accessToken} />
+      <CleanVisualizer accessToken={accessToken} />
       <DebugPanel accessToken={accessToken} />
     </ErrorBoundary>
   );

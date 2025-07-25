@@ -3,16 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import SpotifyAuth from '@/components/SpotifyAuth';
-import InstantVisualizer from '@/components/InstantVisualizer';
+import CleanVisualizer from '@/components/CleanVisualizer';
 import RealTimeAudioVisualizer from '@/components/RealTimeAudioVisualizer';
 import HybridVisualizer from '@/components/HybridVisualizer';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
-type VisualizerType = 'instant' | 'realtime' | 'hybrid';
+type VisualizerType = 'clean' | 'realtime' | 'hybrid';
 
 export default function VisualizerPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [visualizerType, setVisualizerType] = useState<VisualizerType>('instant');
+  const [visualizerType, setVisualizerType] = useState<VisualizerType>('clean');
   const router = useRouter();
 
   useEffect(() => {
@@ -33,14 +33,14 @@ export default function VisualizerPage() {
 
   const renderVisualizer = () => {
     switch (visualizerType) {
-      case 'instant':
-        return <InstantVisualizer accessToken={accessToken} />;
+      case 'clean':
+        return <CleanVisualizer accessToken={accessToken} />;
       case 'realtime':
         return <RealTimeAudioVisualizer accessToken={accessToken} />;
       case 'hybrid':
         return <HybridVisualizer accessToken={accessToken} />;
       default:
-        return <InstantVisualizer accessToken={accessToken} />;
+        return <CleanVisualizer accessToken={accessToken} />;
     }
   };
 
@@ -49,14 +49,14 @@ export default function VisualizerPage() {
       {/* Visualizer Type Selector */}
       <div className="absolute top-4 left-4 z-50 flex gap-2">
         <button
-          onClick={() => setVisualizerType('instant')}
+          onClick={() => setVisualizerType('clean')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-            visualizerType === 'instant'
+            visualizerType === 'clean'
               ? 'bg-green-500/30 text-green-400 border border-green-400/50'
               : 'bg-black/20 text-white/70 hover:bg-white/10'
           }`}
         >
-          🚀 Instant SDK
+          ✨ Clean Mode
         </button>
         
         <button
