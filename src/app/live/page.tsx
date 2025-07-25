@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import SpotifyAuth from '@/components/SpotifyAuth';
-import HybridVisualizer from '@/components/HybridVisualizer';
+import InstantVisualizer from '@/components/InstantVisualizer';
 import DebugPanel from '@/components/DebugPanel';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 export default function LivePage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     // Check for existing token
@@ -29,7 +31,17 @@ export default function LivePage() {
 
   return (
     <ErrorBoundary>
-      <HybridVisualizer accessToken={accessToken} />
+      {/* Quick access to visualizer selector */}
+      <div className="absolute top-4 right-20 z-50">
+        <button
+          onClick={() => router.push('/visualizer')}
+          className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-lg text-sm font-medium backdrop-blur-sm transition-all"
+        >
+          🎛️ Switch Mode
+        </button>
+      </div>
+      
+      <InstantVisualizer accessToken={accessToken} />
       <DebugPanel accessToken={accessToken} />
     </ErrorBoundary>
   );

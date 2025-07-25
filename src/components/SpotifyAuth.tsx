@@ -13,7 +13,7 @@ export default function SpotifyAuth({ onAuthSuccess }: SpotifyAuthProps) {
   const REDIRECT_URI = typeof window !== 'undefined' 
     ? `${window.location.origin}/callback`
     : 'http://localhost:3001/callback';
-  const SCOPES = 'user-read-currently-playing user-read-playback-state streaming user-modify-playback-state';
+  const SCOPES = 'user-read-currently-playing user-read-playback-state streaming user-modify-playback-state user-read-private';
 
   // Check if user is already authenticated
   useEffect(() => {

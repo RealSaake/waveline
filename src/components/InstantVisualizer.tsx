@@ -27,6 +27,7 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
   const [audioMode, setAudioMode] = useState<'spotify-sdk' | 'preview' | 'smart-fallback'>('smart-fallback');
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [player, setPlayer] = useState<any>(null);
+  const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | undefined>(undefined);
@@ -72,6 +73,7 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
         setDeviceId(device_id);
         setPlayer(spotifyPlayer);
         setAudioMode('spotify-sdk');
+        setSdkStatus('ready');
         
         // Transfer playback to this device
         transferPlayback(device_id);
@@ -79,6 +81,17 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
 
       spotifyPlayer.addListener('not_ready', ({ device_id }: { device_id: string }) => {
         console.log('Device has gone offline', device_id);
+        setSdkStatus('error');
+      });
+
+      spotifyPlayer.addListener('initialization_error', ({ message }: { message: string }) => {
+        console.error('Spotify SDK initialization error:', message);
+        setSdkStatus('error');
+      });
+
+      spotifyPlayer.addListener('authentication_error', ({ message }: { message: string }) => {
+        console.error('Spotify SDK authentication error:', message);
+        setSdkStatus('error');
       });
 
       spotifyPlayer.addListener('player_state_changed', (state: any) => {
@@ -138,9 +151,14 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
         const analysis = await response.json();
         console.log('🎵 Got audio analysis:', analysis);
         processAudioAnalysis(analysis);
+      } else if (response.status === 403) {
+        console.log('Audio analysis not available (403), using smart fallback');
+        // Use smart fallback when audio analysis is not available
+        setAudioMode('smart-fallback');
       }
     } catch (error) {
       console.error('Failed to get audio analysis:', error);
+      setAudioMode('smart-fallback');
     }
   };
 

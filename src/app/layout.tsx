@@ -39,13 +39,34 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               // Prevent ethereum property conflicts from browser extensions
-              if (typeof window !== 'undefined') {
-                try {
-                  delete window.ethereum;
-                } catch (e) {
-                  // Ignore if property can't be deleted
+              (function() {
+                if (typeof window !== 'undefined') {
+                  // Store original ethereum if it exists
+                  const originalEthereum = window.ethereum;
+                  
+                  // Override Object.defineProperty for ethereum specifically
+                  const originalDefineProperty = Object.defineProperty;
+                  Object.defineProperty = function(obj, prop, descriptor) {
+                    if (obj === window && prop === 'ethereum') {
+                      // Silently ignore ethereum redefinition attempts
+                      return obj;
+                    }
+                    return originalDefineProperty.call(this, obj, prop, descriptor);
+                  };
+                  
+                  // Also prevent direct assignment errors
+                  try {
+                    Object.defineProperty(window, 'ethereum', {
+                      get: function() { return originalEthereum; },
+                      set: function(value) { return value; },
+                      configurable: true,
+                      enumerable: true
+                    });
+                  } catch (e) {
+                    // Ignore if we can't override
+                  }
                 }
-              }
+              })();
             `,
           }}
         />
