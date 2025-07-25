@@ -28,6 +28,7 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [player, setPlayer] = useState<any>(null);
   const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [volume, setVolume] = useState(0.8);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | undefined>(undefined);
@@ -65,7 +66,7 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
         getOAuthToken: (cb: (token: string) => void) => {
           cb(accessToken);
         },
-        volume: 0.8
+        volume: 1.0 // Full volume so users can hear the music
       });
 
       // Player events
@@ -428,37 +429,37 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
     
     for (let i = 0; i < numBars; i++) {
       const dataIndex = Math.floor((i / numBars) * (audioData.length - 1));
-      const amplitude = audioData[dataIndex] || 0;
+      const amplitude = Math.max(0, Math.min(1, audioData[dataIndex] || 0));
       
-      const barHeight = amplitude * canvas.height * 0.8;
+      const barHeight = Math.max(1, amplitude * canvas.height * 0.8);
       const x = i * barWidth;
-      const y = canvas.height - barHeight;
+      const y = Math.max(0, canvas.height - barHeight);
       
       const hue = (i * 5 + time * 30) % 360;
-      const brightness = 50 + amplitude * 40 + beatFlash * 30;
+      const brightness = Math.max(10, Math.min(90, 50 + amplitude * 40 + (beatFlash || 0) * 30));
       
       // Main bar
       ctx.fillStyle = `hsl(${hue}, 80%, ${brightness}%)`;
-      ctx.fillRect(x, y, barWidth - 2, barHeight);
+      ctx.fillRect(x, y, Math.max(1, barWidth - 2), barHeight);
       
       // Glow effect
       ctx.shadowColor = `hsl(${hue}, 80%, ${brightness}%)`;
-      ctx.shadowBlur = 10 + beatFlash * 20;
-      ctx.fillRect(x, y, barWidth - 2, barHeight);
+      ctx.shadowBlur = Math.max(0, 10 + (beatFlash || 0) * 20);
+      ctx.fillRect(x, y, Math.max(1, barWidth - 2), barHeight);
       ctx.shadowBlur = 0;
     }
 
     // Central pulsing orb
     const bassLevel = audioData.slice(0, 8).reduce((a, b) => a + b, 0) / 8;
-    const orbRadius = 60 + bassLevel * 150 + beatFlash * 100;
+    const safeOrbRadius = Math.max(20, Math.min(300, 60 + (bassLevel || 0) * 150 + (beatFlash || 0) * 100));
     
-    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, orbRadius);
+    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, safeOrbRadius);
     gradient.addColorStop(0, `hsla(${time * 40 % 360}, 90%, 70%, ${0.8 + beatFlash * 0.2})`);
     gradient.addColorStop(1, `hsla(${time * 40 % 360}, 90%, 70%, 0)`);
     
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, orbRadius, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, safeOrbRadius, 0, Math.PI * 2);
     ctx.fill();
   };
 
@@ -469,6 +470,32 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
       document.exitFullscreen();
     }
     setIsFullscreen(!isFullscreen);
+  };
+
+  // Playback controls
+  const togglePlayback = () => {
+    if (player) {
+      player.togglePlay();
+    }
+  };
+
+  const nextTrack = () => {
+    if (player) {
+      player.nextTrack();
+    }
+  };
+
+  const previousTrack = () => {
+    if (player) {
+      player.previousTrack();
+    }
+  };
+
+  const handleVolumeChange = (newVolume: number) => {
+    setVolume(newVolume);
+    if (player) {
+      player.setVolume(newVolume);
+    }
   };
 
   if (!currentTrack) {
@@ -561,14 +588,74 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
                 )}
               </div>
 
-              <button
-                onClick={toggleFullscreen}
-                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
-              </button>
+              {/* Playback Controls */}
+              <div className="flex items-center gap-3">
+                {/* Volume Control */}
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={volume}
+                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                    className="w-16 h-1 bg-white/20 rounded-lg appearance-none slider"
+                  />
+                </div>
+
+                {/* Previous Track */}
+                <button
+                  onClick={previousTrack}
+                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                  title="Previous Track"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+
+                {/* Play/Pause */}
+                <button
+                  onClick={togglePlayback}
+                  className="p-3 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                  title={isPlaying ? "Pause" : "Play"}
+                >
+                  {isPlaying ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  )}
+                </button>
+
+                {/* Next Track */}
+                <button
+                  onClick={nextTrack}
+                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                  title="Next Track"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                {/* Fullscreen */}
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                  title="Toggle Fullscreen"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div className="mt-4">
