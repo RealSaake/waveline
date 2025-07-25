@@ -1,45 +1,61 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function CallbackPage() {
+function CallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState('Processing...');
 
   useEffect(() => {
     const handleCallback = async () => {
-      console.log('Callback page loaded');
+      // Force immediate console log to verify this code is running
+      console.log('🚀 CALLBACK PAGE LOADED - NEW VERSION');
       console.log('Current URL:', window.location.href);
-      console.log('Search params:', window.location.search);
-      
-      const code = searchParams.get('code');
-      const error = searchParams.get('error');
 
-      console.log('Authorization code:', code ? 'Found' : 'Not found');
-      console.log('Error parameter:', error || 'None');
+      // Temporary alert to verify callback page is running
+      alert('Callback page loaded! Check console for diagnostic info.');
 
-      if (error) {
-        console.error('Spotify auth error:', error);
-        setStatus('Authentication failed');
-        setTimeout(() => router.push('/live'), 2000);
-        return;
-      }
-
-      if (!code) {
-        console.error('No authorization code received');
-        setStatus('No authorization code received');
-        setTimeout(() => router.push('/live'), 2000);
-        return;
-      }
+      const diagnostic: any = {
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        searchParams: window.location.search,
+        code: null,
+        error: null,
+        steps: []
+      };
 
       try {
+        // Step 1: Parse parameters
+        const code = searchParams.get('code');
+        const error = searchParams.get('error');
+
+        diagnostic.code = code ? code.substring(0, 20) + '...' : null;
+        diagnostic.error = error;
+        diagnostic.steps.push('URL_PARSED');
+
+        console.log('🔍 SPOTIFY AUTH DIAGNOSTIC:', JSON.stringify(diagnostic, null, 2));
+
+        if (error) {
+          diagnostic.steps.push('ERROR_FOUND');
+          setStatus('Authentication failed');
+          setTimeout(() => router.push('/live'), 2000);
+          return;
+        }
+
+        if (!code) {
+          diagnostic.steps.push('NO_CODE');
+          setStatus('No authorization code received');
+          setTimeout(() => router.push('/live'), 2000);
+          return;
+        }
+
+        // Step 2: Exchange code for token
         setStatus('Exchanging authorization code...');
-        console.log('Starting token exchange with code:', code.substring(0, 20) + '...');
-        
+        diagnostic.steps.push('TOKEN_EXCHANGE_START');
+
         const REDIRECT_URI = `${window.location.origin}/callback`;
-        console.log('Using redirect URI:', REDIRECT_URI);
 
         const response = await fetch('/api/spotify-auth', {
           method: 'POST',
@@ -47,31 +63,36 @@ export default function CallbackPage() {
           body: JSON.stringify({ code, redirectUri: REDIRECT_URI }),
         });
 
-        console.log('Auth API response status:', response.status);
-        console.log('Auth API response headers:', Object.fromEntries(response.headers.entries()));
+        diagnostic.steps.push(`API_RESPONSE_${response.status}`);
 
         if (response.ok) {
           const responseData = await response.json();
-          console.log('Auth API response data:', responseData);
-          
+          diagnostic.steps.push('API_SUCCESS');
+
           const { access_token } = responseData;
-          
+
           if (access_token) {
-            console.log('Successfully received access token');
+            diagnostic.steps.push('TOKEN_RECEIVED');
             localStorage.setItem('spotify_access_token', access_token);
             setStatus('Authentication successful! Redirecting...');
+
+            console.log('✅ SPOTIFY AUTH SUCCESS:', JSON.stringify(diagnostic, null, 2));
             setTimeout(() => router.push('/live'), 1000);
           } else {
-            console.error('No access token in response');
+            diagnostic.steps.push('NO_TOKEN_IN_RESPONSE');
             throw new Error('No access token received');
           }
         } else {
           const errorData = await response.text();
-          console.error('Auth API failed:', response.status, errorData);
+          diagnostic.steps.push('API_ERROR');
+          diagnostic.apiError = errorData;
           throw new Error(`Authentication failed: ${errorData}`);
         }
-      } catch (error) {
-        console.error('Token exchange failed:', error);
+      } catch (error: any) {
+        diagnostic.steps.push('EXCEPTION');
+        diagnostic.exception = error.message;
+        console.log('❌ SPOTIFY AUTH FAILED:', JSON.stringify(diagnostic, null, 2));
+
         setStatus('Authentication failed. Redirecting...');
         setTimeout(() => router.push('/live'), 2000);
       }
@@ -87,5 +108,20 @@ export default function CallbackPage() {
         <p>{status}</p>
       </div>
     </div>
+  );
+}
+
+export default function CallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+        <div className="text-center text-white">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    }>
+      <CallbackContent />
+    </Suspense>
   );
 }
