@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import SpotifyAuth from '@/components/SpotifyAuth';
 import HybridVisualizer from '@/components/HybridVisualizer';
+import DebugPanel from '@/components/DebugPanel';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 export default function LivePage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -25,5 +27,10 @@ export default function LivePage() {
     return <SpotifyAuth onAuthSuccess={handleAuthSuccess} />;
   }
 
-  return <HybridVisualizer accessToken={accessToken} />;
+  return (
+    <ErrorBoundary>
+      <HybridVisualizer accessToken={accessToken} />
+      <DebugPanel accessToken={accessToken} />
+    </ErrorBoundary>
+  );
 }

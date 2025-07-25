@@ -51,6 +51,7 @@ export default function HybridVisualizer({ accessToken }: HybridVisualizerProps)
         const response = await fetch('/api/currently-playing', {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
           },
         });
 
@@ -69,6 +70,44 @@ export default function HybridVisualizer({ accessToken }: HybridVisualizerProps)
           if (data.track) {
             progressRef.current = data.track.progress_ms / data.track.duration_ms;
           }
+        } else if (response.status === 401) {
+          console.log('Token expired, need to refresh or re-authenticate');
+          // Try to refresh token
+          const refreshToken = localStorage.getItem('spotify_refresh_token');
+          if (refreshToken) {
+            try {
+              const refreshResponse = await fetch('/api/refresh-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: refreshToken }),
+              });
+              
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json();
+                localStorage.setItem('spotify_access_token', refreshData.access_token);
+                if (refreshData.refresh_token) {
+                  localStorage.setItem('spotify_refresh_token', refreshData.refresh_token);
+                }
+                if (refreshData.expires_in) {
+                  const expiresAt = Date.now() + (refreshData.expires_in * 1000);
+                  localStorage.setItem('spotify_token_expires_at', expiresAt.toString());
+                }
+                window.location.reload(); // Reload with new token
+              } else {
+                throw new Error('Refresh failed');
+              }
+            } catch (refreshError) {
+              console.error('Token refresh failed:', refreshError);
+              localStorage.clear();
+              window.location.reload();
+            }
+          } else {
+            localStorage.clear();
+            window.location.reload();
+          }
+        } else {
+          const errorData = await response.json();
+          console.error('API Error:', response.status, errorData);
         }
       } catch (error) {
         console.error('Failed to get currently playing:', error);
@@ -76,7 +115,7 @@ export default function HybridVisualizer({ accessToken }: HybridVisualizerProps)
     };
 
     pollCurrentTrack();
-    const interval = setInterval(pollCurrentTrack, 1000); // Fast polling for responsiveness
+    const interval = setInterval(pollCurrentTrack, 3000); // Reduced polling frequency to avoid rate limits
     return () => clearInterval(interval);
   }, [accessToken]);
 

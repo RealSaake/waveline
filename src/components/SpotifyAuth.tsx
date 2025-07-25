@@ -19,7 +19,22 @@ export default function SpotifyAuth({ onAuthSuccess }: SpotifyAuthProps) {
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
     if (token) {
-      onAuthSuccess(token);
+      // Validate token before using it
+      fetch('/api/currently-playing', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      }).then(response => {
+        if (response.ok || response.status === 204) {
+          onAuthSuccess(token);
+        } else if (response.status === 401) {
+          // Token expired, remove it
+          localStorage.removeItem('spotify_access_token');
+        }
+      }).catch(() => {
+        // Network error, still try to use the token
+        onAuthSuccess(token);
+      });
     }
   }, [onAuthSuccess]);
 

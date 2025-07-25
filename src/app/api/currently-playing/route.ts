@@ -9,24 +9,40 @@ export async function GET(request: NextRequest) {
 
     const accessToken = authHeader.replace('Bearer ', '');
 
+    // Validate token format
+    if (!accessToken || accessToken.length < 10) {
+      return NextResponse.json({ error: 'Invalid access token' }, { status: 401 });
+    }
+
     // Get currently playing track
     const currentlyPlayingResponse = await fetch(
       'https://api.spotify.com/v1/me/player/currently-playing',
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
         },
       }
     );
 
+    // Handle no content (nothing playing)
     if (currentlyPlayingResponse.status === 204) {
       return NextResponse.json({ isPlaying: false, track: null });
     }
 
+    // Handle token expiration
+    if (currentlyPlayingResponse.status === 401) {
+      return NextResponse.json({ error: 'Token expired', tokenExpired: true }, { status: 401 });
+    }
+
     if (!currentlyPlayingResponse.ok) {
       const error = await currentlyPlayingResponse.text();
-      console.error('Currently playing API error:', error);
-      return NextResponse.json({ error: 'Failed to get currently playing' }, { status: 400 });
+      console.error('Currently playing API error:', currentlyPlayingResponse.status, error);
+      return NextResponse.json({ 
+        error: 'Failed to get currently playing', 
+        status: currentlyPlayingResponse.status,
+        details: error 
+      }, { status: currentlyPlayingResponse.status });
     }
 
     const currentlyPlaying = await currentlyPlayingResponse.json();
@@ -74,6 +90,7 @@ export async function GET(request: NextRequest) {
       },
       audioFeatures,
       device: currentlyPlaying.device,
+      timestamp: new Date().toISOString(),
     });
 
   } catch (error) {

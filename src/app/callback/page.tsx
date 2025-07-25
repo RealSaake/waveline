@@ -14,8 +14,7 @@ function CallbackContent() {
       console.log('🚀 CALLBACK PAGE LOADED - NEW VERSION');
       console.log('Current URL:', window.location.href);
 
-      // Temporary alert to verify callback page is running
-      alert('Callback page loaded! Check console for diagnostic info.');
+      // Remove the alert for production
 
       const diagnostic: any = {
         timestamp: new Date().toISOString(),
@@ -69,11 +68,17 @@ function CallbackContent() {
           const responseData = await response.json();
           diagnostic.steps.push('API_SUCCESS');
 
-          const { access_token } = responseData;
+          const { access_token, refresh_token, expires_at } = responseData;
 
           if (access_token) {
             diagnostic.steps.push('TOKEN_RECEIVED');
             localStorage.setItem('spotify_access_token', access_token);
+            if (refresh_token) {
+              localStorage.setItem('spotify_refresh_token', refresh_token);
+            }
+            if (expires_at) {
+              localStorage.setItem('spotify_token_expires_at', expires_at.toString());
+            }
             setStatus('Authentication successful! Redirecting...');
 
             console.log('✅ SPOTIFY AUTH SUCCESS:', JSON.stringify(diagnostic, null, 2));

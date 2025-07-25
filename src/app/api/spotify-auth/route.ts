@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token,
       expires_in: tokenData.expires_in,
+      expires_at: Date.now() + (tokenData.expires_in * 1000), // Add expiration timestamp
     });
 
   } catch (error) {
