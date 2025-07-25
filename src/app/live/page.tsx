@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import SpotifyAuth from '@/components/SpotifyAuth';
-import ParticleVisualizer from '@/components/ParticleVisualizer';
+import SmoothVisualizer from '@/components/SmoothVisualizer';
 
 export default function LivePage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -25,5 +25,5 @@ export default function LivePage() {
     return <SpotifyAuth onAuthSuccess={handleAuthSuccess} />;
   }
 
-  return <ParticleVisualizer accessToken={accessToken} />;
+  return <SmoothVisualizer accessToken={accessToken} />;
 }
