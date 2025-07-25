@@ -213,9 +213,9 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
   // Generate audio data
   const generateAudioData = (): number[] => {
     const time = Date.now() * 0.001;
-    const progress = currentTrack ? (currentTrack.progress_ms / currentTrack.duration_ms) : 0;
-    const energy = trackInfo?.energy || 0.7;
-    const tempo = trackInfo?.tempo || 120;
+    const progress = Math.max(0, Math.min(1, currentTrack ? (currentTrack.progress_ms / currentTrack.duration_ms) : 0));
+    const energy = Math.max(0, Math.min(1, trackInfo?.energy || 0.7));
+    const tempo = Math.max(60, Math.min(200, trackInfo?.tempo || 120));
     
     const beatPhase = (time * tempo / 60) % 1;
     const beatIntensity = Math.pow(Math.sin(beatPhase * Math.PI), 2);
@@ -224,12 +224,15 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
     return Array.from({ length: 64 }, (_, i) => {
       const freq = i / 64;
       
-      return (
+      const value = (
         Math.sin(time * 2 + freq * 8) * energy * 0.4 +
         Math.sin(time * 3 + freq * 12) * beatIntensity * 0.6 +
         Math.sin(time * 1.5 + freq * 6) * progress * 0.3 +
         Math.random() * 0.1
       ) * 0.5 * playingMultiplier + 0.2;
+      
+      // Ensure the value is always finite and within bounds
+      return Math.max(0, Math.min(1, isFinite(value) ? value : 0.5));
     });
   };
 
@@ -240,21 +243,27 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
     const time = Date.now() * 0.001;
     
     data.forEach((amplitude, i) => {
+      // Ensure all values are safe
+      const safeAmplitude = Math.max(0, Math.min(1, amplitude || 0));
       const angle = (i / data.length) * Math.PI * 2 + time * 0.5;
-      const distance = 100 + amplitude * 300;
+      const distance = 100 + safeAmplitude * 300;
       const x = centerX + Math.cos(angle) * distance;
       const y = centerY + Math.sin(angle) * distance;
-      const size = 3 + amplitude * 15;
+      const size = Math.max(1, Math.min(50, 3 + safeAmplitude * 15));
       const hue = (i * 6 + time * 50) % 360;
       
-      // Glow effect
-      const gradient = ctx.createRadialGradient(x, y, 0, x, y, size * 2);
-      gradient.addColorStop(0, `hsla(${hue}, 80%, 70%, ${amplitude})`);
+      // Check if coordinates are valid
+      if (!isFinite(x) || !isFinite(y) || !isFinite(size)) return;
+      
+      // Glow effect with safe radius
+      const glowRadius = Math.max(1, size * 2);
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
+      gradient.addColorStop(0, `hsla(${hue}, 80%, 70%, ${safeAmplitude})`);
       gradient.addColorStop(1, `hsla(${hue}, 80%, 70%, 0)`);
       
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(x, y, size * 2, 0, Math.PI * 2);
+      ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
       
       // Core
@@ -275,17 +284,20 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
       
       ctx.beginPath();
       ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.8)`;
-      ctx.lineWidth = 3 + wave;
+      ctx.lineWidth = Math.max(1, 3 + wave);
       
       for (let x = 0; x <= canvas.width; x += 3) {
         const dataIndex = Math.floor((x / canvas.width) * (data.length - 1));
-        const amplitude = data[dataIndex] || 0;
+        const amplitude = Math.max(0, Math.min(1, data[dataIndex] || 0));
         const waveY = y + 
           Math.sin(x * 0.01 + time * 2 + wave * 0.5) * amplitude * 80 +
           Math.sin(x * 0.02 + time * 3) * amplitude * 40;
         
-        if (x === 0) ctx.moveTo(x, waveY);
-        else ctx.lineTo(x, waveY);
+        // Ensure waveY is finite
+        const safeWaveY = isFinite(waveY) ? waveY : y;
+        
+        if (x === 0) ctx.moveTo(x, safeWaveY);
+        else ctx.lineTo(x, safeWaveY);
       }
       ctx.stroke();
     }
@@ -297,15 +309,21 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
     const time = Date.now() * 0.001;
     
     data.forEach((amplitude, i) => {
+      const safeAmplitude = Math.max(0, Math.min(1, amplitude || 0));
       const t = i / data.length;
       const angle = t * Math.PI * 8 + time;
-      const radius = t * 400 + amplitude * 100;
+      const radius = t * 400 + safeAmplitude * 100;
       const x = centerX + Math.cos(angle) * radius;
       const y = centerY + Math.sin(angle) * radius;
-      const size = 2 + amplitude * 12;
+      const size = Math.max(1, Math.min(20, 2 + safeAmplitude * 12));
       const hue = (t * 300 + time * 60) % 360;
+      const lightness = Math.max(10, Math.min(90, 50 + safeAmplitude * 40));
+      const alpha = Math.max(0.1, Math.min(1, 0.7 + safeAmplitude * 0.3));
       
-      ctx.fillStyle = `hsla(${hue}, 80%, ${50 + amplitude * 40}%, ${0.7 + amplitude * 0.3})`;
+      // Check if coordinates are valid
+      if (!isFinite(x) || !isFinite(y) || !isFinite(size)) return;
+      
+      ctx.fillStyle = `hsla(${hue}, 80%, ${lightness}%, ${alpha})`;
       ctx.beginPath();
       ctx.arc(x, y, size, 0, Math.PI * 2);
       ctx.fill();
@@ -316,10 +334,10 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     const time = Date.now() * 0.001;
-    const avgAmplitude = data.reduce((a, b) => a + b, 0) / data.length;
+    const avgAmplitude = Math.max(0, Math.min(1, data.reduce((a, b) => a + b, 0) / data.length || 0));
     
     // Main pulse
-    const radius = 100 + avgAmplitude * 200;
+    const radius = Math.max(20, Math.min(400, 100 + avgAmplitude * 200));
     const hue = (time * 50) % 360;
     
     const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
@@ -334,8 +352,9 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
     
     // Ring effects
     for (let ring = 1; ring <= 3; ring++) {
-      const ringRadius = radius + ring * 50;
-      ctx.strokeStyle = `hsla(${hue + ring * 40}, 70%, 60%, ${avgAmplitude * 0.3})`;
+      const ringRadius = Math.max(1, radius + ring * 50);
+      const alpha = Math.max(0, Math.min(1, avgAmplitude * 0.3));
+      ctx.strokeStyle = `hsla(${hue + ring * 40}, 70%, 60%, ${alpha})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
@@ -344,21 +363,23 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
   };
 
   const drawBars = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
-    const barWidth = canvas.width / data.length;
+    const barWidth = Math.max(1, canvas.width / data.length);
     const time = Date.now() * 0.001;
     
     data.forEach((amplitude, i) => {
-      const height = amplitude * canvas.height * 0.8;
+      const safeAmplitude = Math.max(0, Math.min(1, amplitude || 0));
+      const height = Math.max(1, safeAmplitude * canvas.height * 0.8);
       const x = i * barWidth;
-      const y = canvas.height - height;
+      const y = Math.max(0, canvas.height - height);
       const hue = (i * 6 + time * 30) % 360;
+      const lightness = Math.max(20, Math.min(80, 50 + safeAmplitude * 30));
       
       // Glow
       ctx.shadowColor = `hsl(${hue}, 80%, 60%)`;
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = Math.max(0, 15);
       
-      ctx.fillStyle = `hsl(${hue}, 70%, ${50 + amplitude * 30}%)`;
-      ctx.fillRect(x, y, barWidth - 2, height);
+      ctx.fillStyle = `hsl(${hue}, 70%, ${lightness}%)`;
+      ctx.fillRect(x, y, Math.max(1, barWidth - 2), height);
       
       ctx.shadowBlur = 0;
     });
