@@ -16,17 +16,16 @@ interface CurrentTrack {
   preview_url?: string;
 }
 
-interface RealTimeAudioVisualizerProps {
+interface SystemAudioVisualizerProps {
   accessToken: string;
 }
 
-export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVisualizerProps) {
+export default function SystemAudioVisualizer({ accessToken }: SystemAudioVisualizerProps) {
   const [currentTrack, setCurrentTrack] = useState<CurrentTrack | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [audioMode, setAudioMode] = useState<'spotify' | 'system' | 'preview' | 'fallback'>('fallback');
-  const [audioPermission, setAudioPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
-  const [spotifyPlayer, setSpotifyPlayer] = useState<any>(null);
+  const [audioMode, setAudioMode] = useState<'system' | 'preview' | 'fallback'>('fallback');
+  const [audioEnabled, setAudioEnabled] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | undefined>(undefined);
@@ -56,90 +55,45 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
     };
 
     pollCurrentTrack();
-    const interval = setInterval(pollCurrentTrack, 2000); // Poll every 2 seconds
-
+    const interval = setInterval(pollCurrentTrack, 2000);
     return () => clearInterval(interval);
   }, [accessToken]);
 
-  // Initialize Spotify Web Playback SDK
-  const initSpotifyPlayback = async () => {
+  // System audio capture with screen share
+  const enableSystemAudio = async () => {
     try {
-      // Load Spotify Web Playback SDK
-      if (!(window as any).Spotify) {
-        const script = document.createElement('script');
-        script.src = 'https://sdk.scdn.co/spotify-player.js';
-        script.async = true;
-        document.body.appendChild(script);
-        
-        await new Promise((resolve) => {
-          (window as any).onSpotifyWebPlaybackSDKReady = resolve;
-        });
-      }
-
-      const player = new (window as any).Spotify.Player({
-        name: 'Waveline Visualizer',
-        getOAuthToken: (cb: (token: string) => void) => {
-          cb(accessToken);
-        },
-        volume: 0.1 // Low volume since we're just analyzing
-      });
-
-      // Set up audio analysis
-      player.addListener('ready', ({ device_id }: { device_id: string }) => {
-        console.log('🎵 Spotify player ready with Device ID', device_id);
-        setupSpotifyAudioAnalysis(player);
-      });
-
-      player.addListener('not_ready', ({ device_id }: { device_id: string }) => {
-        console.log('Device ID has gone offline', device_id);
-      });
-
-      player.connect();
-      setSpotifyPlayer(player);
-      setAudioMode('spotify');
-      setAudioPermission('granted');
-      
-    } catch (error) {
-      console.error('Spotify playback failed:', error);
-      trySystemAudioCapture();
-    }
-  };
-
-  const setupSpotifyAudioAnalysis = (player: any) => {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const analyser = audioContext.createAnalyser();
-      
-      // This is a bit tricky - we need to tap into the player's audio
-      // For now, let's use a different approach with system audio
-      trySystemAudioCapture();
-      
-    } catch (error) {
-      console.error('Spotify audio analysis setup failed:', error);
-      trySystemAudioCapture();
-    }
-  };
-
-  // Initialize system audio capture (Chrome/Edge)
-  const trySystemAudioCapture = async () => {
-    try {
-      // @ts-ignore - getDisplayMedia with audio
+      // Request screen share with audio
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: false,
+        video: {
+          mediaSource: 'screen',
+          width: { max: 1 },
+          height: { max: 1 }
+        },
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
+          autoGainControl: false,
           sampleRate: 44100
         }
       });
-      
-      setAudioPermission('granted');
-      
+
+      // Hide the tiny video element
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.stop();
+      }
+
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        throw new Error('No audio track available');
+      }
+
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(stream);
       
-      analyser.fftSize = 512; // Higher resolution for better analysis
+      analyser.fftSize = 1024; // Higher resolution
+      analyser.smoothingTimeConstant = 0.8;
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       
@@ -151,10 +105,19 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
       sourceRef.current = source;
       
       setAudioMode('system');
-      console.log('🔊 System audio capture initialized');
+      setAudioEnabled(true);
+      console.log('🔊 System audio capture enabled');
+
+      // Handle stream end
+      stream.getAudioTracks()[0].onended = () => {
+        setAudioMode('fallback');
+        setAudioEnabled(false);
+        console.log('System audio capture ended');
+      };
+
     } catch (error) {
       console.error('System audio capture failed:', error);
-      setAudioPermission('denied');
+      alert('System audio capture failed. Make sure to:\n1. Select "Share audio" when prompted\n2. Choose the browser tab playing Spotify\n3. Allow audio sharing');
       tryPreviewAnalysis();
     }
   };
@@ -169,7 +132,6 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
       
-      // Fetch and decode audio
       const response = await fetch(currentTrack.preview_url);
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -178,7 +140,8 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
       source.buffer = audioBuffer;
       source.loop = true;
       
-      analyser.fftSize = 256;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.8;
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       
@@ -192,7 +155,8 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
       sourceRef.current = source;
       
       setAudioMode('preview');
-      console.log('🎵 Preview audio analysis initialized');
+      setAudioEnabled(true);
+      console.log('🎶 Preview audio analysis enabled');
     } catch (error) {
       console.error('Preview analysis failed:', error);
       setAudioMode('fallback');
@@ -209,47 +173,41 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
     const animate = () => {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       let frequencyData: Uint8Array | null = null;
       
-      // Get real audio data if available
       if (analyserRef.current && dataArrayRef.current && audioMode !== 'fallback') {
         analyserRef.current.getByteFrequencyData(dataArrayRef.current);
         frequencyData = dataArrayRef.current;
       }
 
-      // Create gradient background
+      // Background gradient
       const gradient = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, 0,
         canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
       );
 
-      if (audioMode === 'spotify') {
-        gradient.addColorStop(0, `hsla(120, 80%, 60%, 0.4)`); // Green for Spotify
-        gradient.addColorStop(1, `hsla(150, 60%, 40%, 0.1)`);
-      } else if (audioMode === 'system') {
-        gradient.addColorStop(0, `hsla(280, 80%, 60%, 0.4)`); // Purple for system audio
+      if (audioMode === 'system') {
+        gradient.addColorStop(0, `hsla(280, 80%, 60%, 0.4)`);
         gradient.addColorStop(1, `hsla(320, 60%, 40%, 0.1)`);
       } else if (audioMode === 'preview') {
-        gradient.addColorStop(0, `hsla(60, 80%, 60%, 0.4)`); // Yellow for preview
+        gradient.addColorStop(0, `hsla(60, 80%, 60%, 0.4)`);
         gradient.addColorStop(1, `hsla(120, 60%, 40%, 0.1)`);
       } else {
-        gradient.addColorStop(0, `hsla(240, 80%, 60%, 0.3)`); // Blue for fallback
+        gradient.addColorStop(0, `hsla(240, 80%, 60%, 0.3)`);
         gradient.addColorStop(1, `hsla(280, 60%, 40%, 0.1)`);
       }
 
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw frequency bars
-      const numBars = frequencyData ? Math.min(frequencyData.length, 128) : 128;
+      // Frequency bars
+      const numBars = frequencyData ? Math.min(frequencyData.length / 2, 128) : 64;
       const barWidth = canvas.width / numBars;
       const time = Date.now() * 0.001;
 
@@ -257,71 +215,68 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
         let amplitude: number;
         
         if (frequencyData && audioMode !== 'fallback') {
-          // Use real audio data
-          amplitude = frequencyData[i] / 255;
+          // Use real audio data with better scaling
+          const dataIndex = Math.floor(i * (frequencyData.length / numBars));
+          amplitude = (frequencyData[dataIndex] / 255) * 1.2;
         } else {
-          // Use fallback animation
+          // Fallback animation
           const frequency = i / numBars;
-          amplitude = 0.7 * 0.8 +
-            Math.sin(time * 2 + frequency * 10) * 0.3 +
-            Math.sin(time * 2 + frequency * 20) * 0.6 * 0.2;
+          amplitude = 0.6 + 
+            Math.sin(time * 2 + frequency * 8) * 0.3 +
+            Math.sin(time * 3 + frequency * 15) * 0.2;
         }
 
-        const barHeight = Math.max(10, amplitude * canvas.height * 0.8);
+        const barHeight = Math.max(5, amplitude * canvas.height * 0.7);
         const x = i * barWidth;
         const y = canvas.height - barHeight;
 
         // Color based on frequency and mode
         let hue: number;
-        if (audioMode === 'spotify') {
-          hue = (i / numBars * 120 + 120) % 360; // Green spectrum for Spotify
-        } else if (audioMode === 'system') {
-          hue = (i / numBars * 120 + 280) % 360; // Purple spectrum for system
+        if (audioMode === 'system') {
+          hue = (i / numBars * 120 + 280) % 360; // Purple spectrum
         } else if (audioMode === 'preview') {
           hue = (i / numBars * 120 + 60) % 360; // Yellow-green spectrum
         } else {
-          hue = (i / numBars * 360 + 240) % 360; // Blue-purple spectrum
+          hue = (i / numBars * 360 + 240) % 360; // Blue spectrum
         }
         
         const saturation = 70 + amplitude * 30;
         const lightness = 50 + amplitude * 40;
 
-        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.8)`;
-        ctx.fillRect(x, y, barWidth - 1, barHeight);
+        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.9)`;
+        ctx.fillRect(x, y, barWidth - 2, barHeight);
 
-        // Add glow effect for real audio
+        // Glow effect for real audio
         if (audioMode !== 'fallback') {
-          ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.6)`;
-          ctx.shadowBlur = 15;
-          ctx.fillRect(x, y, barWidth - 1, barHeight);
+          ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.7)`;
+          ctx.shadowBlur = 20;
+          ctx.fillRect(x, y, barWidth - 2, barHeight);
           ctx.shadowBlur = 0;
         }
       }
 
-      // Draw central circle that responds to audio
+      // Central pulsing circle
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
       
       let pulseRadius: number;
       if (frequencyData && audioMode !== 'fallback') {
-        // Use real audio data for pulse
-        const averageAmplitude = Array.from(frequencyData).reduce((a, b) => a + b, 0) / frequencyData.length / 255;
-        pulseRadius = 100 + averageAmplitude * 200;
+        // Calculate average amplitude from lower frequencies (bass)
+        const bassRange = Math.floor(frequencyData.length * 0.1);
+        const bassSum = Array.from(frequencyData.slice(0, bassRange)).reduce((a, b) => a + b, 0);
+        const bassAverage = bassSum / bassRange / 255;
+        pulseRadius = 80 + bassAverage * 300;
       } else {
-        // Fallback pulse
-        pulseRadius = 100 + Math.sin(time * 2) * 50 * 0.7;
+        pulseRadius = 80 + Math.sin(time * 2) * 40;
       }
 
       const circleGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, pulseRadius);
       
-      if (audioMode === 'spotify') {
-        circleGradient.addColorStop(0, `hsla(120, 80%, 70%, 0.6)`);
-        circleGradient.addColorStop(1, `hsla(120, 80%, 70%, 0)`);
-      } else if (audioMode === 'system') {
-        circleGradient.addColorStop(0, `hsla(280, 80%, 70%, 0.6)`);
+      if (audioMode === 'system') {
+        circleGradient.addColorStop(0, `hsla(280, 80%, 70%, 0.8)`);
         circleGradient.addColorStop(1, `hsla(280, 80%, 70%, 0)`);
       } else if (audioMode === 'preview') {
-        circleGradient.addColorStop(0, `hsla(60, 80%, 70%, 0.6)`);
+        circleGradient.addColorStop(0, `hsla(60, 80%, 70%, 0.8)`);
         circleGradient.addColorStop(1, `hsla(60, 80%, 70%, 0)`);
       } else {
         circleGradient.addColorStop(0, `hsla(240, 80%, 70%, 0.6)`);
@@ -345,7 +300,7 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
     };
   }, [isPlaying, currentTrack, audioMode]);
 
-  // Cleanup audio context
+  // Cleanup
   useEffect(() => {
     return () => {
       if (audioContextRef.current) {
@@ -365,10 +320,8 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
 
   const getAudioModeInfo = () => {
     switch (audioMode) {
-      case 'spotify':
-        return { icon: '🎵', text: 'Spotify direct audio', color: 'text-green-400' };
       case 'system':
-        return { icon: '🔊', text: 'System audio capture', color: 'text-purple-400' };
+        return { icon: '🔊', text: 'System audio analysis', color: 'text-purple-400' };
       case 'preview':
         return { icon: '🎶', text: 'Preview audio analysis', color: 'text-yellow-400' };
       default:
@@ -392,43 +345,32 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
 
   return (
     <div className="relative min-h-screen bg-black overflow-hidden">
-      {/* Canvas Visualization */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-      />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
-      {/* Audio Mode Controls */}
+      {/* Audio Controls */}
       <div className="absolute top-4 left-4 flex gap-2">
-        {audioPermission === 'prompt' && (
+        {!audioEnabled && (
           <>
             <button
-              onClick={initSpotifyPlayback}
-              className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors text-sm font-medium"
-            >
-              🎵 Spotify Audio
-            </button>
-            
-            <button
-              onClick={trySystemAudioCapture}
+              onClick={enableSystemAudio}
               className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg transition-colors text-sm font-medium"
             >
-              🔊 System Audio
+              🔊 Capture System Audio
             </button>
+            
+            {currentTrack.preview_url && (
+              <button
+                onClick={tryPreviewAnalysis}
+                className="px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-colors text-sm font-medium"
+              >
+                🎶 Use Preview
+              </button>
+            )}
           </>
-        )}
-        
-        {currentTrack?.preview_url && audioMode !== 'preview' && (
-          <button
-            onClick={tryPreviewAnalysis}
-            className="px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-colors text-sm font-medium"
-          >
-            🎶 Preview Audio
-          </button>
         )}
       </div>
 
-      {/* Track Info Overlay */}
+      {/* Track Info */}
       <AnimatePresence>
         {currentTrack && (
           <motion.div
@@ -438,7 +380,6 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
             className="absolute bottom-8 left-8 right-8 bg-black/40 backdrop-blur-lg rounded-2xl p-6 text-white"
           >
             <div className="flex items-center gap-6">
-              {/* Album Art */}
               <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
                 <img
                   src={currentTrack.album.images[0]?.url}
@@ -447,7 +388,6 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
                 />
               </div>
 
-              {/* Track Info */}
               <div className="flex-1 min-w-0">
                 <h3 className="text-xl font-bold truncate">{currentTrack.name}</h3>
                 <p className="text-gray-300 truncate">
@@ -456,7 +396,6 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
                 <p className="text-sm text-gray-400">{currentTrack.album.name}</p>
               </div>
 
-              {/* Audio Mode Info */}
               <div className="text-center">
                 <div className={`text-2xl ${modeInfo.color}`}>{modeInfo.icon}</div>
                 <div className={`text-xs ${modeInfo.color} font-medium`}>
@@ -464,21 +403,16 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
                 </div>
               </div>
 
-              {/* Controls */}
-              <div className="flex gap-2">
-                <button
-                  onClick={toggleFullscreen}
-                  className="p-3 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-                  title="Toggle Fullscreen"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
-                </button>
-              </div>
+              <button
+                onClick={toggleFullscreen}
+                className="p-3 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              </button>
             </div>
 
-            {/* Progress Bar */}
             <div className="mt-4">
               <div className="w-full bg-white/20 rounded-full h-1">
                 <div
@@ -493,7 +427,7 @@ export default function RealTimeAudioVisualizer({ accessToken }: RealTimeAudioVi
         )}
       </AnimatePresence>
 
-      {/* Status Indicator */}
+      {/* Status */}
       <div className="absolute top-4 right-4">
         <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${isPlaying ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
           <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-400' : 'bg-red-400'}`} />

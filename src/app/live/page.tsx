@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import SpotifyAuth from '@/components/SpotifyAuth';
-import RealTimeAudioVisualizer from '@/components/RealTimeAudioVisualizer';
+import SystemAudioVisualizer from '@/components/SystemAudioVisualizer';
 
 export default function LivePage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -25,5 +25,5 @@ export default function LivePage() {
     return <SpotifyAuth onAuthSuccess={handleAuthSuccess} />;
   }
 
-  return <RealTimeAudioVisualizer accessToken={accessToken} />;
+  return <SystemAudioVisualizer accessToken={accessToken} />;
 }
