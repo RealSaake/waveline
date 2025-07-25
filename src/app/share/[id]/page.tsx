@@ -130,7 +130,7 @@ export default function SharedVisualizationPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            delay={0.2}
+            transition={{ delay: 0.2 }}
             className="flex items-center justify-between"
           >
             <button
@@ -174,7 +174,7 @@ export default function SharedVisualizationPage() {
       <motion.div
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
-        delay={0.4}
+        transition={{ delay: 0.4 }}
         className="absolute top-1/2 right-6 transform -translate-y-1/2 bg-black/20 backdrop-blur-lg rounded-xl p-4 border border-white/10 max-w-xs"
       >
         <h3 className="text-white font-semibold mb-3">Visual DNA</h3>

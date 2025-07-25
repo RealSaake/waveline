@@ -280,3 +280,9 @@ export class AudioReactiveLights {
     });
   }
 }
+
+// Default export for easy importing
+export default {
+  SmartLightController,
+  AudioReactiveLights
+};

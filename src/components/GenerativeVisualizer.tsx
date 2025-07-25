@@ -304,7 +304,7 @@ class Particle {
 export default function GenerativeVisualizer({ audioData, visualDNA, width, height }: GenerativeVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const artSystemRef = useRef<GenerativeArtSystem | null>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (!canvasRef.current) return;

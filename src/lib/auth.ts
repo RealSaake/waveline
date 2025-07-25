@@ -12,7 +12,7 @@ export interface SpotifyTokens {
 }
 
 export async function encryptTokens(tokens: SpotifyTokens): Promise<string> {
-  return await new SignJWT(tokens)
+  return await new SignJWT(tokens as any)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
@@ -22,7 +22,7 @@ export async function encryptTokens(tokens: SpotifyTokens): Promise<string> {
 export async function decryptTokens(encryptedTokens: string): Promise<SpotifyTokens | null> {
   try {
     const { payload } = await jwtVerify(encryptedTokens, JWT_SECRET);
-    return payload as SpotifyTokens;
+    return payload as unknown as SpotifyTokens;
   } catch {
     return null;
   }
@@ -30,7 +30,7 @@ export async function decryptTokens(encryptedTokens: string): Promise<SpotifyTok
 
 export async function setAuthCookie(tokens: SpotifyTokens) {
   const encryptedTokens = await encryptTokens(tokens);
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   
   cookieStore.set('spotify-auth', encryptedTokens, {
     httpOnly: true,
@@ -42,7 +42,7 @@ export async function setAuthCookie(tokens: SpotifyTokens) {
 }
 
 export async function getAuthCookie(): Promise<SpotifyTokens | null> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const encryptedTokens = cookieStore.get('spotify-auth')?.value;
   
   if (!encryptedTokens) {
@@ -53,7 +53,7 @@ export async function getAuthCookie(): Promise<SpotifyTokens | null> {
 }
 
 export async function clearAuthCookie() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.delete('spotify-auth');
 }
 

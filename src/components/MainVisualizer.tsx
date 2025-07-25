@@ -4,8 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer';
 import GenerativeVisualizer from './GenerativeVisualizer';
-import SmartLightsSettings from './SmartLightsSettings';
-import { smartLights } from '@/lib/smartLights';
 
 interface TrackInfo {
   energy?: number;
@@ -77,12 +75,6 @@ export default function MainVisualizer() {
       console.error('Failed to get track info:', error);
     }
   };
-  const prevTrack = () => player?.previousTrack();
-  const setPlayerVolume = (vol: number) => {
-    setVolume(vol);
-    player?.setVolume(vol);
-  };
-
   // Always animate (not just when playing)
   useEffect(() => {
     const canvas = canvasRef.current;
