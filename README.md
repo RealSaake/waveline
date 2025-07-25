@@ -7,7 +7,7 @@
 
 <br>
 
-[![🚀 **EXPERIENCE LIVE**](https://img.shields.io/badge/🚀_EXPERIENCE_LIVE-FF6B6B?style=for-the-badge&logoColor=white)](https://waveline.vercel.app)
+[![🚀 **EXPERIENCE LIVE**](https://img.shields.io/badge/🚀_EXPERIENCE_LIVE-FF6B6B?style=for-the-badge&logoColor=white)](https://waveline.vercel.app/live)
 [![⭐ Star](https://img.shields.io/github/stars/RealSaake/waveline?style=for-the-badge&color=FFD93D)](https://github.com/RealSaake/waveline)
 [![🎵 Spotify Premium](https://img.shields.io/badge/Spotify_Premium-Required-1DB954?style=for-the-badge&logo=spotify)](https://spotify.com/premium)
 
