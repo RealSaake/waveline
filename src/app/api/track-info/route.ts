@@ -6,23 +6,23 @@ export async function POST(request: NextRequest) {
   try {
     const { trackName, artists, album } = await request.json();
 
-    const prompt = `Analyze this song and provide detailed information in JSON format:
+    const prompt = `You are a music expert. Analyze this song and provide ONLY a JSON response with accurate data:
 
 Song: "${trackName}" by ${artists}
 Album: ${album}
 
-Please provide:
+Return ONLY this JSON format (no other text):
 {
-  "energy": 0.0-1.0 (how energetic/intense the song is),
-  "valence": 0.0-1.0 (how positive/happy the song sounds),
-  "tempo": estimated BPM,
-  "danceability": 0.0-1.0 (how suitable for dancing),
-  "genre": "primary genre",
-  "mood": "brief mood description",
-  "description": "one sentence describing the song's vibe"
+  "energy": [0.0-1.0 based on intensity/power],
+  "valence": [0.0-1.0 based on positivity/happiness],
+  "tempo": [actual BPM estimate],
+  "danceability": [0.0-1.0 based on rhythm/beat],
+  "genre": "[specific genre like 'Pop', 'Hip-Hop', 'Rock', etc.]",
+  "mood": "[one word: 'Energetic', 'Melancholic', 'Upbeat', 'Chill', etc.]",
+  "description": "[2-3 words describing the vibe like 'Dark electronic beats' or 'Uplifting pop anthem']"
 }
 
-Base your analysis on the song's actual characteristics, style, and typical genre conventions. Be accurate and concise.`;
+Be specific and accurate. No generic responses.`;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',

@@ -33,7 +33,7 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
   const [currentTrack, setCurrentTrack] = useState<CurrentTrack | null>(null);
   const [trackInfo, setTrackInfo] = useState<TrackInfo | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [visualMode, setVisualMode] = useState<'particles' | 'waves' | 'spiral' | 'pulse' | 'bars'>('particles');
+  const [visualMode, setVisualMode] = useState<'kaleidoscope' | 'neural' | 'plasma' | 'fractal' | 'liquid'>('kaleidoscope');
   const [player, setPlayer] = useState<any>(null);
   const [volume, setVolume] = useState(0.8);
   const [showSettings, setShowSettings] = useState(false);
@@ -180,20 +180,20 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
 
       // Draw visualization
       switch (visualMode) {
-        case 'particles':
-          drawParticles(ctx, canvas, audioData);
+        case 'kaleidoscope':
+          drawKaleidoscope(ctx, canvas, audioData);
           break;
-        case 'waves':
-          drawWaves(ctx, canvas, audioData);
+        case 'neural':
+          drawNeural(ctx, canvas, audioData);
           break;
-        case 'spiral':
-          drawSpiral(ctx, canvas, audioData);
+        case 'plasma':
+          drawPlasma(ctx, canvas, audioData);
           break;
-        case 'pulse':
-          drawPulse(ctx, canvas, audioData);
+        case 'fractal':
+          drawFractal(ctx, canvas, audioData);
           break;
-        case 'bars':
-          drawBars(ctx, canvas, audioData);
+        case 'liquid':
+          drawLiquid(ctx, canvas, audioData);
           break;
       }
 
@@ -210,179 +210,317 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
     };
   }, [visualMode, trackInfo, isPlaying]);
 
-  // Generate audio data
+  // Generate reactive audio data
   const generateAudioData = (): number[] => {
     const time = Date.now() * 0.001;
     const progress = Math.max(0, Math.min(1, currentTrack ? (currentTrack.progress_ms / currentTrack.duration_ms) : 0));
     const energy = Math.max(0, Math.min(1, trackInfo?.energy || 0.7));
     const tempo = Math.max(60, Math.min(200, trackInfo?.tempo || 120));
+    const danceability = Math.max(0, Math.min(1, trackInfo?.danceability || 0.7));
     
+    // More reactive beat detection
     const beatPhase = (time * tempo / 60) % 1;
-    const beatIntensity = Math.pow(Math.sin(beatPhase * Math.PI), 2);
-    const playingMultiplier = isPlaying ? 1 : 0.3; // Dim when paused
+    const beatIntensity = Math.pow(Math.sin(beatPhase * Math.PI), 3) * energy;
+    const subBeat = Math.sin(time * tempo / 15) * 0.3;
     
-    return Array.from({ length: 64 }, (_, i) => {
-      const freq = i / 64;
+    // Playing state affects intensity dramatically
+    const playingMultiplier = isPlaying ? (1 + beatIntensity * 0.5) : 0.1;
+    
+    return Array.from({ length: 128 }, (_, i) => {
+      const freq = i / 128;
       
-      const value = (
-        Math.sin(time * 2 + freq * 8) * energy * 0.4 +
-        Math.sin(time * 3 + freq * 12) * beatIntensity * 0.6 +
-        Math.sin(time * 1.5 + freq * 6) * progress * 0.3 +
-        Math.random() * 0.1
-      ) * 0.5 * playingMultiplier + 0.2;
+      // Create frequency-specific responses
+      let value = 0;
       
-      // Ensure the value is always finite and within bounds
-      return Math.max(0, Math.min(1, isFinite(value) ? value : 0.5));
+      // Bass (low frequencies)
+      if (freq < 0.3) {
+        value = Math.sin(time * 2 + freq * 6) * energy * 0.8 + beatIntensity * 0.9;
+      }
+      // Mids
+      else if (freq < 0.7) {
+        value = Math.sin(time * 3 + freq * 10) * danceability * 0.6 + subBeat;
+      }
+      // Highs
+      else {
+        value = Math.sin(time * 4 + freq * 15) * energy * 0.4 + Math.random() * 0.2;
+      }
+      
+      // Add progress-based modulation
+      value += Math.sin(time * 1.5 + freq * 8) * progress * 0.4;
+      
+      // Add beat synchronization
+      value *= (0.7 + beatIntensity * 0.6) * playingMultiplier;
+      
+      // Ensure valid range
+      return Math.max(0, Math.min(1, isFinite(value) ? Math.abs(value) : 0.3));
     });
   };
 
-  // Visualization functions
-  const drawParticles = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
+  // Cool visualization functions
+  const drawKaleidoscope = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     const time = Date.now() * 0.001;
     
-    data.forEach((amplitude, i) => {
-      // Ensure all values are safe
-      const safeAmplitude = Math.max(0, Math.min(1, amplitude || 0));
-      const angle = (i / data.length) * Math.PI * 2 + time * 0.5;
-      const distance = 100 + safeAmplitude * 300;
-      const x = centerX + Math.cos(angle) * distance;
-      const y = centerY + Math.sin(angle) * distance;
-      const size = Math.max(1, Math.min(50, 3 + safeAmplitude * 15));
-      const hue = (i * 6 + time * 50) % 360;
+    // Create kaleidoscope effect with multiple symmetrical patterns
+    for (let segment = 0; segment < 8; segment++) {
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate((segment * Math.PI * 2) / 8);
       
-      // Check if coordinates are valid
-      if (!isFinite(x) || !isFinite(y) || !isFinite(size)) return;
+      data.forEach((amplitude, i) => {
+        const safeAmplitude = Math.max(0, Math.min(1, amplitude || 0));
+        const angle = (i / data.length) * Math.PI + time * 0.5;
+        const radius = 50 + safeAmplitude * 200;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius * 0.5; // Flatten for kaleidoscope effect
+        
+        if (!isFinite(x) || !isFinite(y)) return;
+        
+        const size = Math.max(2, safeAmplitude * 20);
+        const hue = (i * 8 + time * 100 + segment * 45) % 360;
+        
+        // Create mirrored effect
+        [-1, 1].forEach(mirror => {
+          const finalX = x * mirror;
+          const finalY = y;
+          
+          const gradient = ctx.createRadialGradient(finalX, finalY, 0, finalX, finalY, size * 2);
+          gradient.addColorStop(0, `hsla(${hue}, 90%, 70%, ${safeAmplitude * 0.8})`);
+          gradient.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`);
+          
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(finalX, finalY, size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      });
       
-      // Glow effect with safe radius
-      const glowRadius = Math.max(1, size * 2);
-      const gradient = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
-      gradient.addColorStop(0, `hsla(${hue}, 80%, 70%, ${safeAmplitude})`);
-      gradient.addColorStop(1, `hsla(${hue}, 80%, 70%, 0)`);
+      ctx.restore();
+    }
+  };
+
+  const drawNeural = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
+    const time = Date.now() * 0.001;
+    const nodes: Array<{x: number, y: number, amplitude: number}> = [];
+    
+    // Create neural network nodes
+    for (let i = 0; i < data.length; i++) {
+      const amplitude = Math.max(0, Math.min(1, data[i] || 0));
+      const x = (Math.random() * 0.8 + 0.1) * canvas.width;
+      const y = (Math.random() * 0.8 + 0.1) * canvas.height;
+      nodes.push({ x, y, amplitude });
+    }
+    
+    // Draw connections between active nodes
+    nodes.forEach((nodeA, i) => {
+      nodes.forEach((nodeB, j) => {
+        if (i >= j) return;
+        
+        const distance = Math.sqrt((nodeA.x - nodeB.x) ** 2 + (nodeA.y - nodeB.y) ** 2);
+        const maxDistance = 200;
+        
+        if (distance < maxDistance && (nodeA.amplitude > 0.3 || nodeB.amplitude > 0.3)) {
+          const opacity = (1 - distance / maxDistance) * Math.max(nodeA.amplitude, nodeB.amplitude);
+          const hue = (i * 10 + time * 50) % 360;
+          
+          ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${opacity * 0.6})`;
+          ctx.lineWidth = Math.max(0.5, opacity * 3);
+          ctx.beginPath();
+          ctx.moveTo(nodeA.x, nodeA.y);
+          ctx.lineTo(nodeB.x, nodeB.y);
+          ctx.stroke();
+        }
+      });
+    });
+    
+    // Draw nodes
+    nodes.forEach((node, i) => {
+      if (node.amplitude < 0.1) return;
+      
+      const size = Math.max(2, node.amplitude * 15);
+      const hue = (i * 15 + time * 80) % 360;
+      const pulse = Math.sin(time * 5 + i * 0.5) * 0.3 + 0.7;
+      
+      const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, size * 2);
+      gradient.addColorStop(0, `hsla(${hue}, 90%, 70%, ${node.amplitude * pulse})`);
+      gradient.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`);
       
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Core
-      ctx.fillStyle = `hsl(${hue}, 90%, 80%)`;
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, size * pulse, 0, Math.PI * 2);
       ctx.fill();
     });
   };
 
-  const drawWaves = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
-    const numWaves = 6;
+  const drawPlasma = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
     const time = Date.now() * 0.001;
+    const imageData = ctx.createImageData(canvas.width, canvas.height);
+    const pixels = imageData.data;
     
-    for (let wave = 0; wave < numWaves; wave++) {
-      const y = (canvas.height / (numWaves + 1)) * (wave + 1);
-      const hue = (wave * 60 + time * 30) % 360;
-      
-      ctx.beginPath();
-      ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.8)`;
-      ctx.lineWidth = Math.max(1, 3 + wave);
-      
-      for (let x = 0; x <= canvas.width; x += 3) {
+    // Create plasma effect with audio reactivity
+    const avgAmplitude = data.reduce((sum, val) => sum + val, 0) / data.length;
+    const plasmaSpeed = 1 + avgAmplitude * 2;
+    const plasmaIntensity = 0.5 + avgAmplitude * 0.5;
+    
+    for (let x = 0; x < canvas.width; x += 2) { // Skip pixels for performance
+      for (let y = 0; y < canvas.height; y += 2) {
         const dataIndex = Math.floor((x / canvas.width) * (data.length - 1));
-        const amplitude = Math.max(0, Math.min(1, data[dataIndex] || 0));
-        const waveY = y + 
-          Math.sin(x * 0.01 + time * 2 + wave * 0.5) * amplitude * 80 +
-          Math.sin(x * 0.02 + time * 3) * amplitude * 40;
+        const amplitude = data[dataIndex] || 0;
         
-        // Ensure waveY is finite
-        const safeWaveY = isFinite(waveY) ? waveY : y;
+        // Plasma calculation
+        const plasma = 
+          Math.sin(x * 0.01 + time * plasmaSpeed) +
+          Math.sin(y * 0.01 + time * plasmaSpeed * 0.7) +
+          Math.sin((x + y) * 0.008 + time * plasmaSpeed * 1.3) +
+          Math.sin(Math.sqrt(x * x + y * y) * 0.005 + time * plasmaSpeed * 0.5);
         
-        if (x === 0) ctx.moveTo(x, safeWaveY);
-        else ctx.lineTo(x, safeWaveY);
+        const normalizedPlasma = (plasma + 4) / 8; // Normalize to 0-1
+        const reactiveValue = normalizedPlasma * plasmaIntensity + amplitude * 0.3;
+        
+        const hue = (reactiveValue * 360 + time * 50) % 360;
+        const saturation = 80 + amplitude * 20;
+        const lightness = 30 + reactiveValue * 50;
+        
+        // Convert HSL to RGB (simplified)
+        const c = (1 - Math.abs(2 * lightness / 100 - 1)) * saturation / 100;
+        const x1 = c * (1 - Math.abs((hue / 60) % 2 - 1));
+        const m = lightness / 100 - c / 2;
+        
+        let r = 0, g = 0, b = 0;
+        if (hue < 60) { r = c; g = x1; b = 0; }
+        else if (hue < 120) { r = x1; g = c; b = 0; }
+        else if (hue < 180) { r = 0; g = c; b = x1; }
+        else if (hue < 240) { r = 0; g = x1; b = c; }
+        else if (hue < 300) { r = x1; g = 0; b = c; }
+        else { r = c; g = 0; b = x1; }
+        
+        const pixelIndex = (y * canvas.width + x) * 4;
+        if (pixelIndex < pixels.length - 3) {
+          pixels[pixelIndex] = Math.max(0, Math.min(255, (r + m) * 255));
+          pixels[pixelIndex + 1] = Math.max(0, Math.min(255, (g + m) * 255));
+          pixels[pixelIndex + 2] = Math.max(0, Math.min(255, (b + m) * 255));
+          pixels[pixelIndex + 3] = Math.max(0, Math.min(255, reactiveValue * 255));
+        }
       }
-      ctx.stroke();
     }
+    
+    ctx.putImageData(imageData, 0, 0);
   };
 
-  const drawSpiral = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
+  const drawFractal = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     const time = Date.now() * 0.001;
     
-    data.forEach((amplitude, i) => {
-      const safeAmplitude = Math.max(0, Math.min(1, amplitude || 0));
-      const t = i / data.length;
-      const angle = t * Math.PI * 8 + time;
-      const radius = t * 400 + safeAmplitude * 100;
-      const x = centerX + Math.cos(angle) * radius;
-      const y = centerY + Math.sin(angle) * radius;
-      const size = Math.max(1, Math.min(20, 2 + safeAmplitude * 12));
-      const hue = (t * 300 + time * 60) % 360;
-      const lightness = Math.max(10, Math.min(90, 50 + safeAmplitude * 40));
-      const alpha = Math.max(0.1, Math.min(1, 0.7 + safeAmplitude * 0.3));
+    // Create fractal tree structure
+    const drawBranch = (x: number, y: number, angle: number, length: number, depth: number, amplitude: number) => {
+      if (depth <= 0 || length < 2) return;
       
-      // Check if coordinates are valid
-      if (!isFinite(x) || !isFinite(y) || !isFinite(size)) return;
+      const endX = x + Math.cos(angle) * length;
+      const endY = y + Math.sin(angle) * length;
       
-      ctx.fillStyle = `hsla(${hue}, 80%, ${lightness}%, ${alpha})`;
+      if (!isFinite(endX) || !isFinite(endY)) return;
+      
+      const hue = (depth * 30 + time * 40 + amplitude * 120) % 360;
+      const alpha = Math.max(0.1, amplitude * (depth / 8));
+      
+      ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${alpha})`;
+      ctx.lineWidth = Math.max(0.5, depth * amplitude);
       ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(x, y);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      
+      // Recursive branches
+      const branchAngle = 0.5 + amplitude * 0.3;
+      const lengthReduction = 0.7 + amplitude * 0.2;
+      
+      drawBranch(endX, endY, angle - branchAngle, length * lengthReduction, depth - 1, amplitude);
+      drawBranch(endX, endY, angle + branchAngle, length * lengthReduction, depth - 1, amplitude);
+    };
+    
+    // Draw multiple fractal trees
+    data.forEach((amplitude, i) => {
+      if (amplitude < 0.2) return;
+      
+      const safeAmplitude = Math.max(0, Math.min(1, amplitude));
+      const angle = (i / data.length) * Math.PI * 2;
+      const startX = centerX + Math.cos(angle) * 100;
+      const startY = centerY + Math.sin(angle) * 100;
+      const initialLength = 30 + safeAmplitude * 50;
+      
+      drawBranch(startX, startY, angle + Math.PI, initialLength, 6, safeAmplitude);
     });
   };
 
-  const drawPulse = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
+  const drawLiquid = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
+    const time = Date.now() * 0.001;
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    const time = Date.now() * 0.001;
-    const avgAmplitude = Math.max(0, Math.min(1, data.reduce((a, b) => a + b, 0) / data.length || 0));
     
-    // Main pulse
-    const radius = Math.max(20, Math.min(400, 100 + avgAmplitude * 200));
-    const hue = (time * 50) % 360;
+    // Create liquid/fluid simulation
+    const numDrops = Math.min(50, data.length);
     
-    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
-    gradient.addColorStop(0, `hsla(${hue}, 80%, 70%, ${avgAmplitude})`);
-    gradient.addColorStop(0.7, `hsla(${hue + 60}, 80%, 60%, ${avgAmplitude * 0.5})`);
-    gradient.addColorStop(1, `hsla(${hue + 120}, 80%, 50%, 0)`);
-    
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Ring effects
-    for (let ring = 1; ring <= 3; ring++) {
-      const ringRadius = Math.max(1, radius + ring * 50);
-      const alpha = Math.max(0, Math.min(1, avgAmplitude * 0.3));
-      ctx.strokeStyle = `hsla(${hue + ring * 40}, 70%, 60%, ${alpha})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
-      ctx.stroke();
+    for (let i = 0; i < numDrops; i++) {
+      const amplitude = Math.max(0, Math.min(1, data[i] || 0));
+      if (amplitude < 0.1) continue;
+      
+      // Liquid drop physics
+      const baseAngle = (i / numDrops) * Math.PI * 2;
+      const flowAngle = baseAngle + Math.sin(time * 2 + i * 0.5) * amplitude * 0.5;
+      const flowDistance = 100 + amplitude * 150 + Math.sin(time * 3 + i * 0.3) * 50;
+      
+      const x = centerX + Math.cos(flowAngle) * flowDistance;
+      const y = centerY + Math.sin(flowAngle) * flowDistance + Math.sin(time * 4 + i * 0.7) * amplitude * 30;
+      
+      if (!isFinite(x) || !isFinite(y)) continue;
+      
+      // Liquid blob size varies with amplitude
+      const blobSize = Math.max(5, amplitude * 40);
+      const hue = (i * 12 + time * 60 + amplitude * 180) % 360;
+      
+      // Create liquid effect with multiple overlapping circles
+      for (let blob = 0; blob < 3; blob++) {
+        const blobOffset = blob * 10;
+        const blobX = x + Math.cos(time * 5 + blob) * blobOffset * amplitude;
+        const blobY = y + Math.sin(time * 5 + blob) * blobOffset * amplitude;
+        const blobRadius = blobSize * (1 - blob * 0.2);
+        
+        const gradient = ctx.createRadialGradient(blobX, blobY, 0, blobX, blobY, blobRadius);
+        gradient.addColorStop(0, `hsla(${hue + blob * 20}, 90%, 70%, ${amplitude * 0.8})`);
+        gradient.addColorStop(0.7, `hsla(${hue + blob * 20}, 90%, 60%, ${amplitude * 0.4})`);
+        gradient.addColorStop(1, `hsla(${hue + blob * 20}, 90%, 50%, 0)`);
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(blobX, blobY, blobRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // Add surface tension lines between nearby drops
+      for (let j = i + 1; j < Math.min(i + 5, numDrops); j++) {
+        const otherAmplitude = data[j] || 0;
+        if (otherAmplitude < 0.1) continue;
+        
+        const otherAngle = (j / numDrops) * Math.PI * 2 + Math.sin(time * 2 + j * 0.5) * otherAmplitude * 0.5;
+        const otherDistance = 100 + otherAmplitude * 150;
+        const otherX = centerX + Math.cos(otherAngle) * otherDistance;
+        const otherY = centerY + Math.sin(otherAngle) * otherDistance;
+        
+        const distance = Math.sqrt((x - otherX) ** 2 + (y - otherY) ** 2);
+        if (distance < 100 && amplitude > 0.3 && otherAmplitude > 0.3) {
+          const connectionStrength = Math.max(amplitude, otherAmplitude) * (1 - distance / 100);
+          
+          ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${connectionStrength * 0.3})`;
+          ctx.lineWidth = Math.max(1, connectionStrength * 5);
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(otherX, otherY);
+          ctx.stroke();
+        }
+      }
     }
-  };
-
-  const drawBars = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: number[]) => {
-    const barWidth = Math.max(1, canvas.width / data.length);
-    const time = Date.now() * 0.001;
-    
-    data.forEach((amplitude, i) => {
-      const safeAmplitude = Math.max(0, Math.min(1, amplitude || 0));
-      const height = Math.max(1, safeAmplitude * canvas.height * 0.8);
-      const x = i * barWidth;
-      const y = Math.max(0, canvas.height - height);
-      const hue = (i * 6 + time * 30) % 360;
-      const lightness = Math.max(20, Math.min(80, 50 + safeAmplitude * 30));
-      
-      // Glow
-      ctx.shadowColor = `hsl(${hue}, 80%, 60%)`;
-      ctx.shadowBlur = Math.max(0, 15);
-      
-      ctx.fillStyle = `hsl(${hue}, 70%, ${lightness}%)`;
-      ctx.fillRect(x, y, Math.max(1, barWidth - 2), height);
-      
-      ctx.shadowBlur = 0;
-    });
   };
 
   if (!currentTrack) {
@@ -406,11 +544,11 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
         {/* Visual Modes */}
         <div className="flex gap-2 bg-black/30 backdrop-blur-md rounded-full p-1">
           {[
-            { mode: 'particles', icon: '✨', label: 'Particles' },
-            { mode: 'waves', icon: '🌊', label: 'Waves' },
-            { mode: 'spiral', icon: '🌀', label: 'Spiral' },
-            { mode: 'pulse', icon: '💫', label: 'Pulse' },
-            { mode: 'bars', icon: '📊', label: 'Bars' }
+            { mode: 'kaleidoscope', icon: '🔮', label: 'Kaleidoscope' },
+            { mode: 'neural', icon: '🧠', label: 'Neural Network' },
+            { mode: 'plasma', icon: '⚡', label: 'Plasma Field' },
+            { mode: 'fractal', icon: '🌿', label: 'Fractal Tree' },
+            { mode: 'liquid', icon: '💧', label: 'Liquid Flow' }
           ].map(({ mode, icon, label }) => (
             <button
               key={mode}
@@ -479,8 +617,8 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
                 </svg>
               </button>
 
-              {/* Volume */}
-              <div className="flex items-center gap-2 ml-4">
+              {/* Volume Slider */}
+              <div className="flex items-center gap-2 ml-6">
                 <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -491,8 +629,9 @@ export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
                   step="0.1"
                   value={volume}
                   onChange={(e) => setPlayerVolume(parseFloat(e.target.value))}
-                  className="w-20 slider"
+                  className="w-24 h-1 bg-white/20 rounded-lg appearance-none slider cursor-pointer"
                 />
+                <span className="text-xs text-white/50 w-8">{Math.round(volume * 100)}%</span>
               </div>
             </div>
           </div>
