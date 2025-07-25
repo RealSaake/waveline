@@ -1,30 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
+  const diagnostic = {
+    timestamp: new Date().toISOString(),
+    requestReceived: true,
+    code: null,
+    redirectUri: null,
+    credentials: {
+      clientId: false,
+      clientSecret: false
+    },
+    spotifyRequest: null,
+    spotifyResponse: null,
+    tokenData: null,
+    steps: []
+  };
+
   try {
-    console.log('Spotify auth API called');
-    const requestData = await request.json();
-    console.log('Request data:', { 
-      code: requestData.code ? requestData.code.substring(0, 20) + '...' : 'None',
-      redirectUri: requestData.redirectUri 
-    });
+    diagnostic.steps.push('API_START');
     
+    const requestData = await request.json();
     const { code, redirectUri } = requestData;
+    
+    diagnostic.code = code ? code.substring(0, 20) + '...' : null;
+    diagnostic.redirectUri = redirectUri;
+    diagnostic.steps.push('REQUEST_PARSED');
     
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
 
-    console.log('Environment check:', {
-      clientId: clientId ? 'Set' : 'Missing',
-      clientSecret: clientSecret ? 'Set' : 'Missing'
-    });
+    diagnostic.credentials.clientId = !!clientId;
+    diagnostic.credentials.clientSecret = !!clientSecret;
+    diagnostic.steps.push('ENV_CHECKED');
+
+    console.log('🔧 SPOTIFY API DIAGNOSTIC:', JSON.stringify(diagnostic, null, 2));
 
     if (!clientId || !clientSecret) {
-      console.error('Spotify credentials not configured');
+      diagnostic.steps.push('MISSING_CREDENTIALS');
+      console.log('❌ SPOTIFY API FAILED:', JSON.stringify(diagnostic, null, 2));
       return NextResponse.json({ error: 'Spotify credentials not configured' }, { status: 500 });
     }
 
-    console.log('Making token exchange request to Spotify');
+    diagnostic.steps.push('SPOTIFY_REQUEST_START');
     
     // Exchange authorization code for access token
     const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
@@ -40,20 +57,30 @@ export async function POST(request: NextRequest) {
       }),
     });
 
-    console.log('Spotify token response status:', tokenResponse.status);
+    diagnostic.spotifyResponse = {
+      status: tokenResponse.status,
+      ok: tokenResponse.ok,
+      headers: Object.fromEntries(tokenResponse.headers.entries())
+    };
+    diagnostic.steps.push(`SPOTIFY_RESPONSE_${tokenResponse.status}`);
 
     if (!tokenResponse.ok) {
       const error = await tokenResponse.text();
-      console.error('Token exchange failed:', tokenResponse.status, error);
+      diagnostic.steps.push('SPOTIFY_ERROR');
+      diagnostic.spotifyError = error;
+      console.log('❌ SPOTIFY API FAILED:', JSON.stringify(diagnostic, null, 2));
       return NextResponse.json({ error: 'Failed to exchange code for token', details: error }, { status: 400 });
     }
 
     const tokenData = await tokenResponse.json();
-    console.log('Token exchange successful:', {
+    diagnostic.tokenData = {
       hasAccessToken: !!tokenData.access_token,
       hasRefreshToken: !!tokenData.refresh_token,
       expiresIn: tokenData.expires_in
-    });
+    };
+    diagnostic.steps.push('TOKEN_SUCCESS');
+    
+    console.log('✅ SPOTIFY API SUCCESS:', JSON.stringify(diagnostic, null, 2));
     
     return NextResponse.json({
       access_token: tokenData.access_token,
@@ -62,7 +89,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Auth API error:', error);
+    diagnostic.steps.push('EXCEPTION');
+    diagnostic.exception = error.message;
+    console.log('❌ SPOTIFY API EXCEPTION:', JSON.stringify(diagnostic, null, 2));
     return NextResponse.json({ error: 'Authentication failed', details: error.message }, { status: 500 });
   }
 }
