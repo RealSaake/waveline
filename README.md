@@ -150,3 +150,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Made with ❤️ by [RealSaake](https://github.com/RealSaake)**
 
 *Transform your music into art with Waveline* 🎵✨
+
+---
+
+### 🔥 Latest Updates
+- **Mind-blowing visualizations** with particles, waves, and cosmic effects
+- **Real-time AI analysis** for accurate track information
+- **Zero-lag audio processing** with Spotify Web Playback SDK
