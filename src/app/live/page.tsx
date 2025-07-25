@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import SpotifyAuth from '@/components/SpotifyAuth';
-import CleanVisualizer from '@/components/CleanVisualizer';
-import DebugPanel from '@/components/DebugPanel';
+import MainVisualizer from '@/components/MainVisualizer';
+
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 export default function LivePage() {
@@ -31,18 +31,9 @@ export default function LivePage() {
 
   return (
     <ErrorBoundary>
-      {/* Quick access to visualizer selector */}
-      <div className="absolute top-4 right-20 z-50">
-        <button
-          onClick={() => router.push('/visualizer')}
-          className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-lg text-sm font-medium backdrop-blur-sm transition-all"
-        >
-          🎛️ Switch Mode
-        </button>
-      </div>
+
       
-      <CleanVisualizer accessToken={accessToken} />
-      <DebugPanel accessToken={accessToken} />
+      <MainVisualizer accessToken={accessToken} />
     </ErrorBoundary>
   );
 }
