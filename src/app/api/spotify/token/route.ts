@@ -1,71 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { getAuthCookie, setAuthCookie, refreshSpotifyToken, clearAuthCookie } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies();
-    const accessToken = cookieStore.get('spotify_access_token')?.value;
-    const refreshToken = cookieStore.get('spotify_refresh_token')?.value;
-
-    if (!accessToken) {
+    let tokens = await getAuthCookie();
+    
+    if (!tokens) {
       return NextResponse.json({ error: 'No access token found' }, { status: 401 });
     }
 
-    // Try to use the current access token
+    // Check if token is expired
+    if (Date.now() >= tokens.expires_at) {
+      // Try to refresh the token
+      const refreshedTokens = await refreshSpotifyToken(tokens.refresh_token);
+      
+      if (!refreshedTokens) {
+        await clearAuthCookie();
+        return NextResponse.json({ error: 'Token expired and refresh failed' }, { status: 401 });
+      }
+      
+      tokens = refreshedTokens;
+      await setAuthCookie(tokens);
+    }
+
+    // Test if the token actually works
     const testResponse = await fetch('https://api.spotify.com/v1/me', {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${tokens.access_token}`,
       },
     });
 
-    if (testResponse.ok) {
-      // Token is still valid
-      return NextResponse.json({ access_token: accessToken });
+    if (!testResponse.ok) {
+      // Token is invalid, try to refresh
+      const refreshedTokens = await refreshSpotifyToken(tokens.refresh_token);
+      
+      if (!refreshedTokens) {
+        await clearAuthCookie();
+        return NextResponse.json({ error: 'Token invalid and refresh failed' }, { status: 401 });
+      }
+      
+      await setAuthCookie(refreshedTokens);
+      return NextResponse.json({ access_token: refreshedTokens.access_token });
     }
 
-    // Token expired, try to refresh
-    if (!refreshToken) {
-      return NextResponse.json({ error: 'Token expired and no refresh token available' }, { status: 401 });
-    }
-
-    const refreshResponse = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64')}`,
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-      }),
-    });
-
-    if (!refreshResponse.ok) {
-      return NextResponse.json({ error: 'Failed to refresh token' }, { status: 401 });
-    }
-
-    const refreshData = await refreshResponse.json();
-    
-    // Update the access token cookie
-    const response = NextResponse.json({ access_token: refreshData.access_token });
-    response.cookies.set('spotify_access_token', refreshData.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 3600, // 1 hour
-    });
-
-    // Update refresh token if provided
-    if (refreshData.refresh_token) {
-      response.cookies.set('spotify_refresh_token', refreshData.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60, // 30 days
-      });
-    }
-
-    return response;
+    // Token is valid
+    return NextResponse.json({ access_token: tokens.access_token });
 
   } catch (error) {
     console.error('Token endpoint error:', error);

@@ -8,43 +8,51 @@ interface SpotifyAuthProps {
 
 export default function SpotifyAuth({ onAuthSuccess }: SpotifyAuthProps) {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [clientId, setClientId] = useState<string | null>(null);
 
-  const CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID;
   const REDIRECT_URI = typeof window !== 'undefined' 
     ? `${window.location.origin}/callback`
-    : 'http://localhost:3001/callback';
+    : 'http://localhost:3000/callback';
   const SCOPES = 'user-read-currently-playing user-read-playback-state streaming user-modify-playback-state user-read-private playlist-read-private playlist-read-collaborative';
 
-  // Check if user is already authenticated
+  // Get client ID and check auth status
   useEffect(() => {
-    const checkAuthStatus = async () => {
+    const initialize = async () => {
       try {
-        const response = await fetch('/api/auth/status');
-        const data = await response.json();
+        // Get client ID
+        const clientResponse = await fetch('/api/spotify/client-id');
+        if (clientResponse.ok) {
+          const { clientId } = await clientResponse.json();
+          setClientId(clientId);
+        }
+
+        // Check if user is already authenticated
+        const authResponse = await fetch('/api/auth/status');
+        const authData = await authResponse.json();
         
-        if (data.authenticated) {
+        if (authData.authenticated) {
           onAuthSuccess();
         }
       } catch (error) {
-        console.error('Auth status check failed:', error);
+        console.error('Initialization failed:', error);
       }
     };
 
-    checkAuthStatus();
+    initialize();
   }, [onAuthSuccess]);
 
 
 
   const handleLogin = () => {
-    if (!CLIENT_ID) {
-      console.error('Spotify Client ID not configured');
+    if (!clientId) {
+      console.error('Spotify Client ID not available');
       return;
     }
 
     setIsAuthenticating(true);
     
     const authUrl = `https://accounts.spotify.com/authorize?` +
-      `client_id=${CLIENT_ID}&` +
+      `client_id=${clientId}&` +
       `response_type=code&` +
       `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
       `scope=${encodeURIComponent(SCOPES)}&` +
@@ -67,10 +75,15 @@ export default function SpotifyAuth({ onAuthSuccess }: SpotifyAuthProps) {
           
           <button
             onClick={handleLogin}
-            disabled={isAuthenticating}
+            disabled={isAuthenticating || !clientId}
             className="w-full py-3 px-6 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-3"
           >
-            {isAuthenticating ? (
+            {!clientId ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Loading...
+              </>
+            ) : isAuthenticating ? (
               <>
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 Connecting...
