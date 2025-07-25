@@ -63,6 +63,8 @@ npm run dev
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 NEXT_PUBLIC_SPOTIFY_CLIENT_ID=your_spotify_client_id
+GEMINI_API_KEY=your_gemini_api_key
+NEXTAUTH_SECRET=your_super_secret_jwt_key_for_production
 ```
 
 ### Tech Stack

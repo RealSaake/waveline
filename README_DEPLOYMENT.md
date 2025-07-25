@@ -21,9 +21,10 @@ vercel
 After deployment, go to your Vercel dashboard and add these environment variables:
 
 ```
-SPOTIFY_CLIENT_ID=89f8ec139aa2450db2ca6eee826948e9
-SPOTIFY_CLIENT_SECRET=6b3fafc0fcd54c5cbfae5c01da18c8ad
-NEXT_PUBLIC_SPOTIFY_CLIENT_ID=89f8ec139aa2450db2ca6eee826948e9
+SPOTIFY_CLIENT_ID=your_spotify_client_id_here
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
+NEXT_PUBLIC_SPOTIFY_CLIENT_ID=your_spotify_client_id_here
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ### 3. Update Spotify App Settings

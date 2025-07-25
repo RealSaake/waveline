@@ -2,18 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-interface CurrentTrack {
-  id: string;
-  name: string;
-  artists: { name: string }[];
-  album: {
-    name: string;
-    images: { url: string }[];
-  };
-  duration_ms: number;
-  progress_ms: number;
-}
+import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer';
 
 interface TrackInfo {
   energy?: number;
@@ -25,129 +14,55 @@ interface TrackInfo {
   description?: string;
 }
 
-interface MainVisualizerProps {
-  accessToken: string;
-}
+export default function MainVisualizer() {
+  const {
+    currentTrack,
+    audioData,
+    isPlaying,
+    isConnected,
+    error,
+    volume,
+    togglePlayback,
+    setVolume,
+    skipToNext,
+    skipToPrevious,
+  } = useSpotifyPlayer();
 
-export default function MainVisualizer({ accessToken }: MainVisualizerProps) {
-  const [currentTrack, setCurrentTrack] = useState<CurrentTrack | null>(null);
   const [trackInfo, setTrackInfo] = useState<TrackInfo | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [visualMode, setVisualMode] = useState<'kaleidoscope' | 'neural' | 'plasma' | 'fractal' | 'liquid'>('kaleidoscope');
-  const [player, setPlayer] = useState<any>(null);
-  const [volume, setVolume] = useState(0.8);
   const [showSettings, setShowSettings] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | undefined>(undefined);
 
-  // Initialize Spotify SDK
+  // Get enhanced track info when track changes
   useEffect(() => {
-    const initSDK = async () => {
-      if ((window as any).Spotify) {
-        setupPlayer();
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://sdk.scdn.co/spotify-player.js';
-      script.async = true;
-      document.body.appendChild(script);
-
-      (window as any).onSpotifyWebPlaybackSDKReady = () => {
-        setupPlayer();
-      };
-    };
-
-    const setupPlayer = () => {
-      const spotifyPlayer = new (window as any).Spotify.Player({
-        name: 'Waveline',
-        getOAuthToken: (cb: (token: string) => void) => cb(accessToken),
-        volume: 1.0
-      });
-
-      spotifyPlayer.addListener('ready', ({ device_id }: { device_id: string }) => {
-        setPlayer(spotifyPlayer);
-        transferPlayback(device_id);
-      });
-
-      spotifyPlayer.addListener('player_state_changed', (state: any) => {
-        if (!state) return;
-        setCurrentTrack(state.track_window.current_track);
-        setIsPlaying(!state.paused);
-        
-        if (state.track_window.current_track) {
-          getTrackInfo(state.track_window.current_track);
-        }
-      });
-
-      spotifyPlayer.connect();
-    };
-
-    initSDK();
-  }, [accessToken]);
-
-  // Transfer playback
-  const transferPlayback = async (deviceId: string) => {
-    try {
-      await fetch('https://api.spotify.com/v1/me/player', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ device_ids: [deviceId], play: false }),
-      });
-    } catch (error) {
-      console.error('Transfer failed:', error);
+    if (currentTrack) {
+      getTrackInfo(currentTrack);
     }
-  };
+  }, [currentTrack]);
 
-  // Get track info
-  const getTrackInfo = async (track: CurrentTrack) => {
+  // Get track info with AI enhancement
+  const getTrackInfo = async (track: any) => {
     try {
-      // Try Spotify first
-      const spotifyResponse = await fetch(`https://api.spotify.com/v1/audio-features/${track.id}`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-      });
-
-      let info: TrackInfo = {};
-
-      if (spotifyResponse.ok) {
-        const features = await spotifyResponse.json();
-        info = {
-          energy: features.energy,
-          valence: features.valence,
-          tempo: features.tempo,
-          danceability: features.danceability,
-        };
-      }
-
-      // Enhance with AI
       const aiResponse = await fetch('/api/track-info', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           trackName: track.name,
-          artists: track.artists.map(a => a.name).join(', '),
-          album: track.album.name
+          artists: track.artists.join(', '),
+          album: track.album
         }),
       });
 
       if (aiResponse.ok) {
         const aiInfo = await aiResponse.json();
-        info = { ...info, ...aiInfo };
+        setTrackInfo(aiInfo);
       }
-
-      setTrackInfo(info);
     } catch (error) {
       console.error('Failed to get track info:', error);
     }
   };
-
-  // Playback controls
-  const togglePlay = () => player?.togglePlay();
-  const nextTrack = () => player?.nextTrack();
   const prevTrack = () => player?.previousTrack();
   const setPlayerVolume = (vol: number) => {
     setVolume(vol);

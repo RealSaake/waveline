@@ -68,24 +68,15 @@ function CallbackContent() {
           const responseData = await response.json();
           diagnostic.steps.push('API_SUCCESS');
 
-          const { access_token, refresh_token, expires_at } = responseData;
-
-          if (access_token) {
-            diagnostic.steps.push('TOKEN_RECEIVED');
-            localStorage.setItem('spotify_access_token', access_token);
-            if (refresh_token) {
-              localStorage.setItem('spotify_refresh_token', refresh_token);
-            }
-            if (expires_at) {
-              localStorage.setItem('spotify_token_expires_at', expires_at.toString());
-            }
+          if (responseData.success) {
+            diagnostic.steps.push('AUTH_SUCCESS');
             setStatus('Authentication successful! Redirecting...');
 
             console.log('✅ SPOTIFY AUTH SUCCESS:', JSON.stringify(diagnostic, null, 2));
             setTimeout(() => router.push('/live'), 1000);
           } else {
-            diagnostic.steps.push('NO_TOKEN_IN_RESPONSE');
-            throw new Error('No access token received');
+            diagnostic.steps.push('NO_SUCCESS_FLAG');
+            throw new Error('Authentication response invalid');
           }
         } else {
           const errorData = await response.text();

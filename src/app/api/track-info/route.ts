@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const GEMINI_API_KEY = 'AIzaSyAsdKynMaoqQxkfIRC8NeipdBJg37x7TH0';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 export async function POST(request: NextRequest) {
   try {
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY not configured');
+    }
+
     const { trackName, artists, album } = await request.json();
 
     const prompt = `You are a music expert. Analyze this song and provide ONLY a JSON response with accurate data:

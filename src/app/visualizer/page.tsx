@@ -1,36 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SpotifyAuth from '@/components/SpotifyAuth';
 import MainVisualizer from '@/components/MainVisualizer';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
-type VisualizerType = 'main';
-
 export default function VisualizerPage() {
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [visualizerType, setVisualizerType] = useState<VisualizerType>('main');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    // Check for existing token
-    const token = localStorage.getItem('spotify_access_token');
-    if (token) {
-      setAccessToken(token);
-    }
-  }, []);
-
-  const handleAuthSuccess = (token: string) => {
-    setAccessToken(token);
+  const handleAuthSuccess = () => {
+    setIsAuthenticated(true);
   };
 
-  if (!accessToken) {
+  if (!isAuthenticated) {
     return <SpotifyAuth onAuthSuccess={handleAuthSuccess} />;
   }
 
   const renderVisualizer = () => {
-    return <MainVisualizer accessToken={accessToken} />;
+    return <MainVisualizer />;
   };
 
   return (

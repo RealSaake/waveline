@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react';
 
 interface SpotifyAuthProps {
-  onAuthSuccess: (accessToken: string) => void;
+  onAuthSuccess: () => void;
 }
 
 export default function SpotifyAuth({ onAuthSuccess }: SpotifyAuthProps) {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  const CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || '89f8ec139aa2450db2ca6eee826948e9';
+  const CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID;
   const REDIRECT_URI = typeof window !== 'undefined' 
     ? `${window.location.origin}/callback`
     : 'http://localhost:3001/callback';
@@ -17,35 +17,31 @@ export default function SpotifyAuth({ onAuthSuccess }: SpotifyAuthProps) {
 
   // Check if user is already authenticated
   useEffect(() => {
-    const token = localStorage.getItem('spotify_access_token');
-    if (token) {
-      // Validate token before using it
-      fetch('/api/currently-playing', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      }).then(response => {
-        if (response.ok || response.status === 204) {
-          onAuthSuccess(token);
-        } else if (response.status === 401) {
-          // Token expired, remove it
-          localStorage.removeItem('spotify_access_token');
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        
+        if (data.authenticated) {
+          onAuthSuccess();
         }
-      }).catch(() => {
-        // Network error, still try to use the token
-        onAuthSuccess(token);
-      });
-    }
+      } catch (error) {
+        console.error('Auth status check failed:', error);
+      }
+    };
+
+    checkAuthStatus();
   }, [onAuthSuccess]);
 
 
 
   const handleLogin = () => {
+    if (!CLIENT_ID) {
+      console.error('Spotify Client ID not configured');
+      return;
+    }
+
     setIsAuthenticating(true);
-    
-    console.log('CLIENT_ID:', CLIENT_ID);
-    console.log('REDIRECT_URI:', REDIRECT_URI);
-    console.log('SCOPES:', SCOPES);
     
     const authUrl = `https://accounts.spotify.com/authorize?` +
       `client_id=${CLIENT_ID}&` +
@@ -53,8 +49,6 @@ export default function SpotifyAuth({ onAuthSuccess }: SpotifyAuthProps) {
       `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
       `scope=${encodeURIComponent(SCOPES)}&` +
       `show_dialog=true`;
-    
-    console.log('Full auth URL:', authUrl);
     
     window.location.href = authUrl;
   };
