@@ -1,7 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthCookie, setAuthCookie, refreshSpotifyToken, clearAuthCookie } from '@/lib/auth';
 
+// Input validation for API paths
+function validateSpotifyPath(path: string): boolean {
+  const allowedPaths = [
+    'me/player/currently-playing',
+    'me/player/play',
+    'me/player/pause',
+    'me/player/next',
+    'me/player/previous',
+    'me/player/volume',
+    'me/player',
+    'me/top/tracks',
+    'me/playlists',
+    'search'
+  ];
+  
+  return allowedPaths.some(allowed => 
+    path === allowed || path.startsWith(allowed + '?') || path.startsWith(allowed + '/')
+  );
+}
+
 async function makeSpotifyRequest(path: string, tokens: any, options: RequestInit = {}) {
+  // Validate the path to prevent unauthorized API access
+  if (!validateSpotifyPath(path)) {
+    throw new Error('Unauthorized API path');
+  }
+  
   const url = `https://api.spotify.com/v1/${path}`;
   
   const response = await fetch(url, {
@@ -73,17 +98,40 @@ async function handleSpotifyRequest(request: NextRequest, path: string) {
     return NextResponse.json(data, { status: spotifyResponse.status });
 
   } catch (error) {
-    console.error('Spotify proxy error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Log detailed error server-side for debugging
+    console.error('Spotify proxy error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      path,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Return generic error to client to prevent information leakage
+    return NextResponse.json({ 
+      error: 'Service temporarily unavailable' 
+    }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest, { params }: { params: { path: string[] } }) {
-  const path = params.path.join('/');
-  const searchParams = request.nextUrl.searchParams.toString();
-  const fullPath = searchParams ? `${path}?${searchParams}` : path;
-  
-  return handleSpotifyRequest(request, fullPath);
+  try {
+    const path = params.path.join('/');
+    
+    // Validate and sanitize search parameters
+    const searchParams = new URLSearchParams();
+    for (const [key, value] of request.nextUrl.searchParams.entries()) {
+      // Only allow safe parameter names and values
+      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key) && value.length < 1000) {
+        searchParams.set(key, value);
+      }
+    }
+    
+    const fullPath = searchParams.toString() ? `${path}?${searchParams.toString()}` : path;
+    
+    return handleSpotifyRequest(request, fullPath);
+  } catch (error) {
+    console.error('GET request validation error:', error);
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  }
 }
 
 export async function POST(request: NextRequest, { params }: { params: { path: string[] } }) {

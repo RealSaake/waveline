@@ -157,9 +157,9 @@ class Particle {
   constructor(x: number, y: number, visualDNA: VisualDNA, isBurst = false) {
     this.x = x;
     this.y = y;
-    this.vx = (Math.random() - 0.5) * visualDNA.particleSpeed;
-    this.vy = (Math.random() - 0.5) * visualDNA.particleSpeed;
-    this.size = visualDNA.particleSize * (0.5 + Math.random() * 0.5);
+    this.vx = (Math.random() - 0.5) * Math.max(0.1, visualDNA.particleSpeed);
+    this.vy = (Math.random() - 0.5) * Math.max(0.1, visualDNA.particleSpeed);
+    this.size = Math.max(0.5, Math.abs(visualDNA.particleSize * (0.5 + Math.random() * 0.5)));
     this.maxLife = isBurst ? 60 : 300 + Math.random() * 200;
     this.life = this.maxLife;
     this.shape = visualDNA.particleShape;
@@ -181,8 +181,15 @@ class Particle {
       this.vx += (Math.random() - 0.5) * frequency * 0.1;
       this.vy += (Math.random() - 0.5) * frequency * 0.1;
       
-      // Size pulsing based on audio
-      this.size += Math.sin(time * 10 + this.x * 0.01) * audioData.volume * 0.5;
+      // Size pulsing based on audio (ensure positive size)
+      const sizeModulation = Math.sin(time * 10 + this.x * 0.01) * audioData.volume * 0.5;
+      this.size = Math.max(0.5, this.size + sizeModulation);
+    }
+    
+    // Ensure size stays positive and finite
+    this.size = Math.max(1, Math.abs(this.size || 1));
+    if (!isFinite(this.size)) {
+      this.size = 1;
     }
     
     this.x += this.vx;
@@ -230,9 +237,13 @@ class Particle {
   }
 
   private renderCircle(ctx: CanvasRenderingContext2D) {
-    ctx.beginPath();
-    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
-    ctx.fill();
+    // Ensure radius is always positive and reasonable
+    const radius = Math.max(1, Math.abs(this.size || 1));
+    if (radius > 0 && isFinite(radius)) {
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   private renderTriangle(ctx: CanvasRenderingContext2D) {

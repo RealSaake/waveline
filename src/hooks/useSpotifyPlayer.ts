@@ -42,20 +42,25 @@ export function useSpotifyPlayer() {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const animationFrameRef = useRef<number>();
 
-  // Initialize audio context for visualization
+  // Initialize audio context for visualization (only after user interaction)
   const initializeAudioContext = useCallback(async () => {
     try {
       if (!audioContextRef.current) {
+        // Only create AudioContext after user interaction to avoid warnings
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         analyserRef.current = audioContextRef.current.createAnalyser();
         analyserRef.current.fftSize = 256;
       }
 
       if (audioContextRef.current.state === 'suspended') {
+        // Only resume if user has interacted with the page
         await audioContextRef.current.resume();
       }
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
+      // Fallback: don't use real audio analysis
+      audioContextRef.current = null;
+      analyserRef.current = null;
     }
   }, []);
 
@@ -71,10 +76,21 @@ export function useSpotifyPlayer() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          setState(prev => ({ ...prev, error: 'Authentication expired', isConnected: false }));
+          setState(prev => ({ ...prev, error: 'Please reconnect to Spotify', isConnected: false }));
           return;
         }
-        throw new Error(`HTTP ${response.status}`);
+        if (response.status === 403) {
+          setState(prev => ({ ...prev, error: 'Spotify Premium required for playback control', isConnected: false }));
+          return;
+        }
+        if (response.status >= 500) {
+          // Server errors - don't show to user, just log
+          console.warn(`Spotify service temporarily unavailable (${response.status})`);
+          return;
+        }
+        // Other client errors
+        console.warn(`Spotify API returned ${response.status}`);
+        return;
       }
 
       const data = await response.json();
@@ -99,8 +115,9 @@ export function useSpotifyPlayer() {
         }));
       }
     } catch (error) {
-      console.error('Failed to fetch current track:', error);
-      setState(prev => ({ ...prev, error: 'Failed to fetch track info' }));
+      // Silently handle network errors to avoid console spam
+      console.warn('Spotify API request failed:', error);
+      setState(prev => ({ ...prev, error: null })); // Don't show error to user for network issues
     }
   }, []);
 
@@ -159,31 +176,46 @@ export function useSpotifyPlayer() {
   // Control playback
   const togglePlayback = useCallback(async () => {
     try {
+      // Initialize audio context on first user interaction
+      if (!audioContextRef.current) {
+        await initializeAudioContext();
+      }
+
       const endpoint = state.isPlaying ? 'pause' : 'play';
       const response = await fetch(`/api/spotify/me/player/${endpoint}`, {
         method: 'PUT',
       });
 
       if (response.ok || response.status === 204) {
-        setState(prev => ({ ...prev, isPlaying: !prev.isPlaying }));
+        setState(prev => ({ ...prev, isPlaying: !prev.isPlaying, error: null }));
+      } else if (response.status === 404) {
+        setState(prev => ({ ...prev, error: 'No active Spotify device found' }));
+      } else if (response.status === 403) {
+        setState(prev => ({ ...prev, error: 'Spotify Premium required' }));
       }
     } catch (error) {
-      console.error('Failed to toggle playback:', error);
+      setState(prev => ({ ...prev, error: 'Playback control unavailable' }));
     }
-  }, [state.isPlaying]);
+  }, [state.isPlaying, initializeAudioContext]);
 
   const setVolume = useCallback(async (volume: number) => {
     try {
-      const volumePercent = Math.round(volume * 100);
+      // Validate volume input
+      const clampedVolume = Math.max(0, Math.min(1, volume));
+      const volumePercent = Math.round(clampedVolume * 100);
+      
       const response = await fetch(`/api/spotify/me/player/volume?volume_percent=${volumePercent}`, {
         method: 'PUT',
       });
 
       if (response.ok || response.status === 204) {
-        setState(prev => ({ ...prev, volume }));
+        setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
+      } else if (response.status === 404) {
+        setState(prev => ({ ...prev, error: 'No active Spotify device found' }));
       }
     } catch (error) {
-      console.error('Failed to set volume:', error);
+      // Don't show volume errors to user as they're not critical
+      console.warn('Volume control unavailable:', error);
     }
   }, []);
 
