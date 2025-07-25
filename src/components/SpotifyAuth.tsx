@@ -13,54 +13,33 @@ export default function SpotifyAuth({ onAuthSuccess }: SpotifyAuthProps) {
   const REDIRECT_URI = typeof window !== 'undefined' 
     ? `${window.location.origin}/callback`
     : 'http://localhost:3001/callback';
-  const SCOPES = [
-    'user-read-playback-state',
-    'user-modify-playback-state',
-    'user-read-currently-playing',
-    'streaming',
-    'user-read-email',
-    'user-read-private'
-  ].join(' ');
+  const SCOPES = 'user-read-currently-playing';
 
+  // Check if user is already authenticated
   useEffect(() => {
-    // Check if we're returning from Spotify auth
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    
-    if (code) {
-      exchangeCodeForToken(code);
+    const token = localStorage.getItem('spotify_access_token');
+    if (token) {
+      onAuthSuccess(token);
     }
-  }, []);
+  }, [onAuthSuccess]);
 
-  const exchangeCodeForToken = async (code: string) => {
-    try {
-      const response = await fetch('/api/spotify-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, redirectUri: REDIRECT_URI }),
-      });
 
-      if (response.ok) {
-        const { access_token } = await response.json();
-        localStorage.setItem('spotify_access_token', access_token);
-        onAuthSuccess(access_token);
-        
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    } catch (error) {
-      console.error('Token exchange failed:', error);
-    }
-  };
 
   const handleLogin = () => {
     setIsAuthenticating(true);
+    
+    console.log('CLIENT_ID:', CLIENT_ID);
+    console.log('REDIRECT_URI:', REDIRECT_URI);
+    console.log('SCOPES:', SCOPES);
+    
     const authUrl = `https://accounts.spotify.com/authorize?` +
       `client_id=${CLIENT_ID}&` +
       `response_type=code&` +
       `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
       `scope=${encodeURIComponent(SCOPES)}&` +
       `show_dialog=true`;
+    
+    console.log('Full auth URL:', authUrl);
     
     window.location.href = authUrl;
   };

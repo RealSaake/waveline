@@ -36,23 +36,30 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>();
 
   // Poll for currently playing track
   useEffect(() => {
     const pollCurrentTrack = async () => {
       try {
+        console.log('Polling with token:', accessToken ? 'Token exists' : 'No token');
         const response = await fetch('/api/currently-playing', {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
           },
         });
 
+        console.log('API Response status:', response.status);
+        
         if (response.ok) {
           const data = await response.json();
+          console.log('API Response data:', data);
           setCurrentTrack(data.track);
           setAudioFeatures(data.audioFeatures);
           setIsPlaying(data.isPlaying);
+        } else {
+          const errorData = await response.text();
+          console.error('API Error:', response.status, errorData);
         }
       } catch (error) {
         console.error('Failed to get currently playing:', error);
@@ -110,7 +117,7 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
 
       for (let i = 0; i < numBars; i++) {
         const frequency = i / numBars;
-        const amplitude = audioFeatures.energy * 0.8 + 
+        const amplitude = audioFeatures.energy * 0.8 +
           Math.sin(time * audioFeatures.tempo / 60 + frequency * 10) * 0.3 +
           Math.sin(time * 2 + frequency * 20) * audioFeatures.danceability * 0.2;
 
@@ -269,9 +276,7 @@ export default function RealTimeVisualizer({ accessToken }: RealTimeVisualizerPr
 
       {/* Status Indicator */}
       <div className="absolute top-4 right-4">
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${
-          isPlaying ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-        }`}>
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${isPlaying ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
           <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-400' : 'bg-red-400'}`} />
           {isPlaying ? 'Playing' : 'Paused'}
         </div>

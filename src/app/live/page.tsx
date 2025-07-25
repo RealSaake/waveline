@@ -10,7 +10,9 @@ export default function LivePage() {
   useEffect(() => {
     // Check for existing token
     const token = localStorage.getItem('spotify_access_token');
+    console.log('Live page - Checking for stored token:', token ? 'Found' : 'Not found');
     if (token) {
+      console.log('Live page - Setting access token');
       setAccessToken(token);
     }
   }, []);
