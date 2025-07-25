@@ -221,29 +221,66 @@ export function useSpotifyPlayer() {
         return;
       }
 
-      let audioElement: HTMLAudioElement | null = null;
+      // More aggressive audio element detection
+      const findAudioElement = async (): Promise<HTMLAudioElement | null> => {
+        let audioElement: HTMLAudioElement | null = null;
 
-      // Try multiple methods to find the audio element
-      if (player) {
-        // Method 1: Try to get from Spotify player (private API)
-        audioElement = (player as any)._options?.getAudioElement?.() || 
-                      (player as any)._audioElement ||
-                      (player as any)._player?._html5Audio;
-      }
+        // Method 1: Try to get from Spotify player (multiple possible locations)
+        if (player) {
+          const possiblePaths = [
+            (player as any)._options?.getAudioElement?.(),
+            (player as any)._audioElement,
+            (player as any)._player?._html5Audio,
+            (player as any).getHTMLAudioElement?.(),
+            (player as any)._internal?.audioElement,
+          ];
+          
+          for (const element of possiblePaths) {
+            if (element && element.tagName === 'AUDIO') {
+              audioElement = element;
+              break;
+            }
+          }
+        }
 
-      // Method 2: Look for any audio element on the page
-      if (!audioElement) {
-        audioElement = document.querySelector('audio');
-      }
+        // Method 2: Search DOM for audio elements
+        if (!audioElement) {
+          const audioElements = document.querySelectorAll('audio');
+          if (audioElements.length > 0) {
+            // Prefer audio elements with src or that are playing
+            for (const element of audioElements) {
+              if (element.src || !element.paused) {
+                audioElement = element;
+                break;
+              }
+            }
+            // Fallback to first audio element
+            if (!audioElement) {
+              audioElement = audioElements[0];
+            }
+          }
+        }
 
-      // Method 3: Wait a bit and try again (audio element might be created later)
-      if (!audioElement) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        audioElement = document.querySelector('audio');
-      }
+        // Method 3: Wait and retry (Spotify creates elements asynchronously)
+        if (!audioElement) {
+          console.log('No audio element found, waiting and retrying...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          const audioElements = document.querySelectorAll('audio');
+          if (audioElements.length > 0) {
+            audioElement = audioElements[0];
+          }
+        }
+
+        return audioElement;
+      };
+
+      const audioElement = await findAudioElement();
 
       if (audioElement) {
         try {
+          console.log('Found audio element:', audioElement);
+          
           // Create audio source from the HTML5 audio element
           sourceRef.current = audioContextRef.current.createMediaElementSource(audioElement);
           
@@ -251,17 +288,20 @@ export function useSpotifyPlayer() {
           sourceRef.current.connect(analyserRef.current);
           analyserRef.current.connect(audioContextRef.current.destination);
           
-          console.log('Audio analyser connected successfully to:', audioElement);
+          console.log('Audio analyser connected successfully!');
           
           // Update state to reflect real audio connection
           setState(prev => ({ ...prev, error: null }));
           
         } catch (sourceError) {
-          console.warn('Failed to create media source, element might already be connected:', sourceError);
+          console.warn('Failed to create media source:', sourceError);
           // This can happen if the element is already connected to another source
+          // Try to find if there's another audio element
+          const allAudioElements = document.querySelectorAll('audio');
+          console.log('All audio elements found:', allAudioElements.length);
         }
       } else {
-        console.warn('No audio element found for analysis');
+        console.warn('No audio element found for analysis after all attempts');
       }
     } catch (error) {
       console.error('Failed to connect audio analyser:', error);
@@ -276,9 +316,12 @@ export function useSpotifyPlayer() {
   const tryConnectToAudio = useCallback(async () => {
     if (sourceRef.current) return; // Already connected
     
-    const audioElement = document.querySelector('audio');
-    if (audioElement) {
-      await connectAudioAnalyser();
+    const audioElements = document.querySelectorAll('audio');
+    console.log(`Periodic check: Found ${audioElements.length} audio elements`);
+    
+    if (audioElements.length > 0) {
+      console.log('Attempting to connect to audio element...');
+      await connectAudioAnalyser(playerRef.current || undefined);
     }
   }, [connectAudioAnalyser]);
 
@@ -311,8 +354,23 @@ export function useSpotifyPlayer() {
         console.log('Spotify player ready with device ID:', device_id);
         setState(prev => ({ ...prev, isConnected: true, error: null }));
         
-        // Try to connect audio analyser after a short delay
-        setTimeout(() => connectAudioAnalyser(player), 1000);
+        // Try to connect audio analyser with multiple attempts
+        const attemptConnection = async () => {
+          const delays = [500, 1500, 3000, 5000]; // Try at different intervals
+          
+          for (const delay of delays) {
+            if (sourceRef.current) break; // Already connected
+            
+            console.log(`Attempting audio connection in ${delay}ms...`);
+            setTimeout(() => {
+              if (!sourceRef.current) {
+                connectAudioAnalyser(player);
+              }
+            }, delay);
+          }
+        };
+        
+        attemptConnection();
       });
 
       player.addListener('not_ready', ({ device_id }) => {
@@ -339,6 +397,12 @@ export function useSpotifyPlayer() {
           currentTrack: trackInfo,
           isPlaying: !state.paused,
         }));
+
+        // Try to connect audio analyser when music starts playing
+        if (!state.paused && !sourceRef.current) {
+          console.log('Music started playing, attempting audio connection...');
+          setTimeout(() => connectAudioAnalyser(player), 1000);
+        }
       });
 
       player.addListener('initialization_error', ({ message }) => {
@@ -599,7 +663,7 @@ export function useSpotifyPlayer() {
       updateAudioData();
 
       // Periodically try to connect to audio if not already connected
-      const audioCheckInterval = setInterval(tryConnectToAudio, 5000);
+      const audioCheckInterval = setInterval(tryConnectToAudio, 2000);
       
       return () => clearInterval(audioCheckInterval);
     };
