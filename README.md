@@ -1,36 +1,146 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Waveline - Visual Music Moodboard Generator
 
-## Getting Started
+Transform your Spotify playlists into beautiful visual moodboards with album art, dominant color palettes, and audio features like energy, tempo, and valence.
 
-First, run the development server:
+## Features
+
+- **Spotify Playlist Input**: Paste any public Spotify playlist URL
+- **Visual Moodboard Generation**: Beautiful track tiles with:
+  - Album cover art
+  - Dominant color extraction
+  - Valence mood bars
+  - Energy and tempo indicators
+- **Responsive Design**: Mobile-first layout that works on all devices
+- **Dynamic Backgrounds**: Background gradients that adapt to playlist mood
+- **Export Options**: Export moodboards as PNG (coming soon)
+
+## Tech Stack
+
+- **Frontend**: Next.js 15 with App Router
+- **Styling**: Tailwind CSS
+- **Animations**: Framer Motion
+- **API**: Spotify Web API
+- **Deployment**: Vercel-ready
+
+## Setup Instructions
+
+### 1. Clone and Install
+
+```bash
+git clone <your-repo-url>
+cd waveline
+npm install
+```
+
+### 2. Spotify API Setup
+
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new app
+3. Copy your Client ID and Client Secret
+4. Update `.env.local`:
+
+```env
+SPOTIFY_CLIENT_ID=your_spotify_client_id_here
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
+```
+
+### 3. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Enter Playlist URL**: Paste a public Spotify playlist URL
+2. **Generate Moodboard**: Click "Generate Moodboard" to fetch playlist data
+3. **Explore**: Scroll through the visual moodboard with track cards
+4. **Export**: Use the export button to save as PNG (feature coming soon)
 
-## Learn More
+### Sample Playlist URLs to Try
 
-To learn more about Next.js, take a look at the following resources:
+- Top 50 Global: `https://open.spotify.com/playlist/37i9dQZF1DXcBWFJp2gaKH`
+- Today's Top Hits: `https://open.spotify.com/playlist/37i9dQZF1DX0XUsuxWHRQd`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+waveline/
+├── src/
+│   ├── app/
+│   │   ├── api/playlist/route.ts    # Spotify API integration
+│   │   ├── globals.css              # Global styles
+│   │   ├── layout.tsx               # Root layout
+│   │   └── page.tsx                 # Main page
+│   └── components/
+│       ├── Moodboard.tsx            # Moodboard grid component
+│       ├── PlaylistInput.tsx        # URL input form
+│       └── TrackCard.tsx            # Individual track cards
+├── public/                          # Static assets
+└── README.md
+```
 
-## Deploy on Vercel
+## API Endpoints
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### POST /api/playlist
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Fetches playlist data and audio features from Spotify.
+
+**Request Body:**
+```json
+{
+  "playlistUrl": "https://open.spotify.com/playlist/..."
+}
+```
+
+**Response:**
+```json
+{
+  "name": "Playlist Name",
+  "description": "Playlist description",
+  "tracks": [...],
+  "audioFeatures": [...]
+}
+```
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Add environment variables in Vercel dashboard
+4. Deploy!
+
+### Environment Variables for Production
+
+```env
+SPOTIFY_CLIENT_ID=your_production_client_id
+SPOTIFY_CLIENT_SECRET=your_production_client_secret
+```
+
+## Roadmap
+
+- [x] Basic playlist input and moodboard generation
+- [x] Dominant color extraction from album art
+- [x] Audio features visualization (valence, energy, tempo)
+- [x] Responsive design
+- [ ] PNG export functionality
+- [ ] Shareable moodboard links
+- [ ] Light/dark mode toggle
+- [ ] Advanced audio feature visualizations
+- [ ] User authentication and saved moodboards
+- [ ] Playlist mood analysis and insights
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details.
