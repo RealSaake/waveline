@@ -34,6 +34,7 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   
   // Real-time audio data
   const audioDataRef = useRef<number[]>(new Array(128).fill(0));
@@ -100,8 +101,9 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
         setCurrentTrack(state.track_window.current_track);
         setIsPlaying(!state.paused);
         
-        // Get audio analysis for current track
-        if (state.track_window.current_track) {
+        // Set up real-time audio analysis from SDK
+        if (!state.paused && state.track_window.current_track) {
+          setupSDKAudioAnalysis(spotifyPlayer);
           getAudioAnalysis(state.track_window.current_track.id);
         }
       });
@@ -135,6 +137,98 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
       console.log('✅ Playback transferred to Waveline');
     } catch (error) {
       console.error('Failed to transfer playback:', error);
+    }
+  };
+
+  // Set up real-time audio analysis from Spotify SDK
+  const setupSDKAudioAnalysis = async (spotifyPlayer: any) => {
+    try {
+      // Wait a bit for the audio element to be created
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Try multiple ways to find the audio element
+      let audioElement = null;
+      
+      // Method 1: Look for any audio element
+      audioElement = document.querySelector('audio');
+      
+      // Method 2: Look for Spotify-specific audio elements
+      if (!audioElement) {
+        audioElement = document.querySelector('[data-testid="audio-element"]') ||
+                      document.querySelector('.spotify-audio') ||
+                      document.querySelector('#spotify-player-audio');
+      }
+      
+      // Method 3: Try to get from player internals (if available)
+      if (!audioElement && spotifyPlayer._options) {
+        audioElement = spotifyPlayer._options.getAudioElement?.();
+      }
+
+      if (audioElement && !sourceRef.current) {
+        console.log('🎵 Found audio element:', audioElement);
+        
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaElementSource(audioElement);
+        
+        analyser.fftSize = 1024; // Higher resolution for better visualization
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        
+        audioContextRef.current = audioContext;
+        analyserRef.current = analyser;
+        dataArrayRef.current = dataArray;
+        sourceRef.current = source;
+        
+        console.log('🚀 SDK Real-time audio analysis connected!');
+        setAudioMode('spotify-sdk');
+      } else {
+        console.log('🎵 Audio element not found, using smart fallback');
+        // Try system audio capture as fallback
+        trySystemAudioCapture();
+      }
+    } catch (error) {
+      console.error('SDK audio analysis setup failed:', error);
+      trySystemAudioCapture();
+    }
+  };
+
+  // Try system audio capture as fallback
+  const trySystemAudioCapture = async () => {
+    try {
+      // @ts-ignore - getDisplayMedia with audio
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: false,
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          sampleRate: 44100
+        }
+      });
+      
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+      
+      analyser.fftSize = 1024;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      source.connect(analyser);
+      
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      dataArrayRef.current = dataArray;
+      sourceRef.current = source;
+      
+      setAudioMode('preview'); // Use preview mode for system audio
+      console.log('🔊 System audio capture enabled as fallback');
+    } catch (error) {
+      console.error('System audio capture failed:', error);
+      setAudioMode('smart-fallback');
     }
   };
 
@@ -259,7 +353,7 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
       let audioData: number[];
 
       // Get real-time audio data
-      if (analyserRef.current && dataArrayRef.current && audioMode === 'preview') {
+      if (analyserRef.current && dataArrayRef.current && (audioMode === 'spotify-sdk' || audioMode === 'preview')) {
         analyserRef.current.getByteFrequencyData(dataArrayRef.current);
         audioData = Array.from(dataArrayRef.current).map(v => v / 255);
       } else {
@@ -398,13 +492,30 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
 
       {/* Controls */}
       <div className="absolute top-4 left-4 flex gap-2">
-        {audioMode === 'smart-fallback' && currentTrack?.preview_url && (
-          <button
-            onClick={enableSmartFallback}
-            className="px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-colors text-sm font-medium backdrop-blur-sm"
-          >
-            🎶 Enable Preview Analysis
-          </button>
+        {audioMode === 'smart-fallback' && (
+          <>
+            <button
+              onClick={trySystemAudioCapture}
+              className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg transition-colors text-sm font-medium backdrop-blur-sm"
+            >
+              🔊 Capture System Audio
+            </button>
+            
+            {currentTrack?.preview_url && (
+              <button
+                onClick={enableSmartFallback}
+                className="px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-colors text-sm font-medium backdrop-blur-sm"
+              >
+                🎶 Preview Analysis
+              </button>
+            )}
+          </>
+        )}
+        
+        {sdkStatus === 'loading' && (
+          <div className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-sm font-medium backdrop-blur-sm">
+            🔄 Loading SDK...
+          </div>
         )}
       </div>
 
@@ -437,12 +548,17 @@ export default function InstantVisualizer({ accessToken }: InstantVisualizerProp
               <div className="text-center">
                 <div className="text-xl">
                   {audioMode === 'spotify-sdk' ? '🚀' : 
-                   audioMode === 'preview' ? '🎶' : '⚡'}
+                   audioMode === 'preview' ? '🔊' : '⚡'}
                 </div>
                 <div className="text-xs text-white/70 font-medium">
-                  {audioMode === 'spotify-sdk' ? 'Spotify SDK' : 
-                   audioMode === 'preview' ? 'Preview' : 'Instant'}
+                  {audioMode === 'spotify-sdk' ? 'SDK Audio' : 
+                   audioMode === 'preview' ? 'System Audio' : 'Smart Mode'}
                 </div>
+                {analyserRef.current && (
+                  <div className="text-xs text-green-400 font-bold animate-pulse">
+                    LIVE
+                  </div>
+                )}
               </div>
 
               <button
