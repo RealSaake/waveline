@@ -40,6 +40,9 @@ export default function MainVisualizer() {
     skipToPrevious,
     hasRealAudio,
     error,
+    needsUserInteraction,
+    audioContextReady,
+    activateAudio,
   } = useSpotifyPlayer();
 
   const [trackInfo, setTrackInfo] = useState<TrackInfo | null>(null);
@@ -701,6 +704,28 @@ export default function MainVisualizer() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Audio Activation Button */}
+      {needsUserInteraction && !audioContextReady && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-gray-900/90 backdrop-blur-md rounded-2xl p-8 max-w-md mx-4 border border-gray-700 text-center">
+            <div className="text-6xl mb-4">🎵</div>
+            <h3 className="text-white font-bold text-xl mb-4">Enable Audio Analysis</h3>
+            <p className="text-gray-300 mb-6 text-sm">
+              Click below to activate real-time audio visualization. This allows the app to analyze your music and create reactive visuals.
+            </p>
+            <button
+              onClick={activateAudio}
+              className="w-full py-3 px-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold rounded-lg transition-all transform hover:scale-105"
+            >
+              🚀 Activate Audio Visualization
+            </button>
+            <p className="text-gray-500 text-xs mt-4">
+              Required by browser security policy
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Audio Setup Guide */}
       <AudioSetupGuide hasRealAudio={hasRealAudio} error={error} />

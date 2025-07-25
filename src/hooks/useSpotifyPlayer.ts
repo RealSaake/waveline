@@ -97,6 +97,8 @@ export function useSpotifyPlayer() {
     isConnected: boolean;
     error: string | null;
     volume: number;
+    audioContextReady: boolean;
+    needsUserInteraction: boolean;
   }>({
     currentTrack: null,
     audioData: null,
@@ -104,6 +106,8 @@ export function useSpotifyPlayer() {
     isConnected: false,
     error: null,
     volume: 0.7,
+    audioContextReady: false,
+    needsUserInteraction: true,
   });
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -189,7 +193,7 @@ export function useSpotifyPlayer() {
     });
   }, []);
 
-  // Initialize audio context and analyser
+  // Initialize audio context and analyser (requires user interaction)
   const initializeAudioContext = useCallback(async () => {
     try {
       if (!audioContextRef.current) {
@@ -202,18 +206,41 @@ export function useSpotifyPlayer() {
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
+
+      setState(prev => ({ 
+        ...prev, 
+        audioContextReady: true, 
+        needsUserInteraction: false 
+      }));
+      
+      console.log('Audio context initialized successfully');
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Failed to initialize audio context' 
+      }));
     }
   }, []);
+
+  // User-triggered audio activation
+  const activateAudio = useCallback(async () => {
+    console.log('User activated audio - initializing audio context...');
+    await initializeAudioContext();
+    
+    // Try to connect to existing player if available
+    if (playerRef.current) {
+      setTimeout(() => connectAudioAnalyser(playerRef.current!), 500);
+    }
+  }, [initializeAudioContext]);
 
   // Connect Spotify player to Web Audio API
   const connectAudioAnalyser = useCallback(async (player?: SpotifyPlayer) => {
     try {
-      await initializeAudioContext();
-      
+      // Don't initialize audio context automatically - wait for user interaction
       if (!audioContextRef.current || !analyserRef.current) {
-        throw new Error('Audio context not initialized');
+        console.log('Audio context not ready - user interaction required');
+        return;
       }
 
       if (sourceRef.current) {
@@ -312,12 +339,11 @@ export function useSpotifyPlayer() {
     }
   }, [initializeAudioContext]);
 
-  // Try to connect to any available audio periodically
+  // Try to connect to any available audio periodically (only if audio context is ready)
   const tryConnectToAudio = useCallback(async () => {
-    if (sourceRef.current) return; // Already connected
+    if (sourceRef.current || !audioContextRef.current) return; // Already connected or no audio context
     
     const audioElements = document.querySelectorAll('audio');
-    console.log(`Periodic check: Found ${audioElements.length} audio elements`);
     
     if (audioElements.length > 0) {
       console.log('Attempting to connect to audio element...');
@@ -354,23 +380,12 @@ export function useSpotifyPlayer() {
         console.log('Spotify player ready with device ID:', device_id);
         setState(prev => ({ ...prev, isConnected: true, error: null }));
         
-        // Try to connect audio analyser with multiple attempts
-        const attemptConnection = async () => {
-          const delays = [500, 1500, 3000, 5000]; // Try at different intervals
-          
-          for (const delay of delays) {
-            if (sourceRef.current) break; // Already connected
-            
-            console.log(`Attempting audio connection in ${delay}ms...`);
-            setTimeout(() => {
-              if (!sourceRef.current) {
-                connectAudioAnalyser(player);
-              }
-            }, delay);
-          }
-        };
-        
-        attemptConnection();
+        // Only try to connect audio if audio context is already ready (user has interacted)
+        if (audioContextRef.current && state.audioContextReady) {
+          setTimeout(() => connectAudioAnalyser(player), 1000);
+        } else {
+          console.log('Audio context not ready - waiting for user interaction');
+        }
       });
 
       player.addListener('not_ready', ({ device_id }) => {
@@ -398,8 +413,8 @@ export function useSpotifyPlayer() {
           isPlaying: !state.paused,
         }));
 
-        // Try to connect audio analyser when music starts playing
-        if (!state.paused && !sourceRef.current) {
+        // Try to connect audio analyser when music starts playing (only if audio context is ready)
+        if (!state.paused && !sourceRef.current && audioContextRef.current) {
           console.log('Music started playing, attempting audio connection...');
           setTimeout(() => connectAudioAnalyser(player), 1000);
         }
@@ -662,8 +677,12 @@ export function useSpotifyPlayer() {
       // Start audio data updates
       updateAudioData();
 
-      // Periodically try to connect to audio if not already connected
-      const audioCheckInterval = setInterval(tryConnectToAudio, 2000);
+      // Periodically try to connect to audio if not already connected (only after user interaction)
+      const audioCheckInterval = setInterval(() => {
+        if (state.audioContextReady) {
+          tryConnectToAudio();
+        }
+      }, 2000);
       
       return () => clearInterval(audioCheckInterval);
     };
@@ -692,5 +711,6 @@ export function useSpotifyPlayer() {
     skipToPrevious,
     refreshTrack: fetchCurrentTrack,
     hasRealAudio: !!sourceRef.current, // True if we have real audio connection
+    activateAudio, // Function to activate audio after user interaction
   };
 }
