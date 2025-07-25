@@ -372,7 +372,7 @@ export function useSpotifyPlayer() {
             if (token) cb(token);
           });
         },
-        volume: state.volume,
+        volume: 0.5, // Use a safe default volume
       });
 
       // Player event listeners
@@ -596,25 +596,37 @@ export function useSpotifyPlayer() {
   const setVolume = useCallback(async (volume: number) => {
     try {
       const clampedVolume = Math.max(0, Math.min(1, volume));
+      const volumePercent = Math.round(clampedVolume * 100);
       
-      if (playerRef.current) {
-        // Use Web Playback SDK
-        await playerRef.current.setVolume(clampedVolume);
-        setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
-      } else {
-        // Fallback to Spotify API
-        const volumePercent = Math.round(clampedVolume * 100);
-        
-        const response = await fetch(`/api/spotify/me/player/volume?volume_percent=${volumePercent}`, {
-          method: 'PUT',
-        });
+      // Use Spotify API (more reliable than Web Playback SDK for volume)
+      console.log(`Setting volume to ${volumePercent}% via API`);
+      const response = await fetch(`/api/spotify/me/player/volume?volume_percent=${volumePercent}`, {
+        method: 'PUT',
+      });
 
-        if (response.ok || response.status === 204) {
+      if (response.ok || response.status === 204) {
+        setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
+        console.log(`Volume set successfully to ${volumePercent}%`);
+      } else {
+        console.error(`Volume API failed with status ${response.status}:`, await response.text());
+        // If API fails, try Web Playback SDK as fallback
+        if (playerRef.current) {
+          console.log('Trying Web Playback SDK volume control as fallback');
+          await playerRef.current.setVolume(clampedVolume);
           setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
         }
       }
     } catch (error) {
       console.warn('Volume control unavailable:', error);
+      // Try Web Playback SDK as last resort
+      try {
+        if (playerRef.current) {
+          await playerRef.current.setVolume(clampedVolume);
+          setState(prev => ({ ...prev, volume: clampedVolume, error: null }));
+        }
+      } catch (sdkError) {
+        console.warn('Web Playback SDK volume control also failed:', sdkError);
+      }
     }
   }, []);
 
