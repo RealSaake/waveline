@@ -1,18 +1,16 @@
-# Waveline - Visual Music Moodboard Generator
+# Waveline - The Ultimate Audio Visualizer
 
-Transform your Spotify playlists into beautiful visual moodboards with album art, dominant color palettes, and audio features like energy, tempo, and valence.
+The most insane audio visualizer ever created. Real-time particle systems, beat detection, and mind-bending visual effects that sync perfectly with your music. Transform your Spotify listening into a mesmerizing visual experience.
 
 ## Features
 
-- **Spotify Playlist Input**: Paste any public Spotify playlist URL
-- **Visual Moodboard Generation**: Beautiful track tiles with:
-  - Album cover art
-  - Dominant color extraction
-  - Valence mood bars
-  - Energy and tempo indicators
-- **Responsive Design**: Mobile-first layout that works on all devices
-- **Dynamic Backgrounds**: Background gradients that adapt to playlist mood
-- **Export Options**: Export moodboards as PNG (coming soon)
+- **🔊 Real-Time Audio Analysis**: System audio capture with 2048 FFT resolution
+- **✨ 4 Visual Modes**: Smooth Waves, Floating Orbs, Flow Lines, Bloom Petals
+- **🎵 Beat Detection**: Smart adaptive thresholds that respond to bass drops
+- **🌊 Smooth Performance**: Optimized 60fps animations with no seizure triggers
+- **🎨 Hypnotic Visuals**: Particle systems and gradients that dance with your music
+- **🚀 Zero Setup**: No signup required, works instantly in any browser
+- **📱 Responsive Design**: Perfect on desktop, tablet, and mobile
 
 ## Tech Stack
 

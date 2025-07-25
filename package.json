@@ -2,6 +2,8 @@
   "name": "waveline",
   "version": "0.1.0",
   "private": true,
+  "author": "saake",
+  "description": "The most insane audio visualizer ever created - real-time particle systems, beat detection, and mind-bending visual effects",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
