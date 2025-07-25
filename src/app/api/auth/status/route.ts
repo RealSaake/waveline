@@ -14,8 +14,7 @@ export async function GET() {
     
     return NextResponse.json({ 
       authenticated: !isExpired,
-      expires_at: tokens.expires_at,
-      access_token: !isExpired ? tokens.access_token : null
+      expires_at: tokens.expires_at
     });
 
   } catch (error) {
