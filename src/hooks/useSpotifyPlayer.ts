@@ -528,6 +528,46 @@ export function useSpotifyPlayer() {
 
 
 
+  // Fallback simulated audio data
+  const generateSimulatedAudioData = useCallback(() => {
+    if (state.isPlaying) {
+      // Generate realistic audio visualization data
+      const frequencies = new Uint8Array(128);
+      const time = Date.now() / 1000;
+      
+      for (let i = 0; i < frequencies.length; i++) {
+        frequencies[i] = Math.sin(time * 2 + i * 0.1) * 50 + 100 + Math.random() * 30;
+      }
+
+      const bassLevel = Math.sin(time * 3) * 0.3 + 0.5;
+      const midLevel = Math.sin(time * 2.5) * 0.3 + 0.5;
+      const trebleLevel = Math.sin(time * 4) * 0.3 + 0.5;
+
+      setState(prev => ({
+        ...prev,
+        audioData: {
+          frequencies,
+          volume: 0.6,
+          bassLevel,
+          midLevel,
+          trebleLevel,
+        }
+      }));
+    } else {
+      // Silent state
+      setState(prev => ({
+        ...prev,
+        audioData: {
+          frequencies: new Uint8Array(128),
+          volume: 0,
+          bassLevel: 0,
+          midLevel: 0,
+          trebleLevel: 0,
+        }
+      }));
+    }
+  }, [state.isPlaying]);
+
   // Get real-time audio data from Web Audio API
   const updateAudioData = useCallback(() => {
     if (analyserRef.current && state.isPlaying) {
@@ -590,46 +630,6 @@ export function useSpotifyPlayer() {
 
     animationFrameRef.current = requestAnimationFrame(updateAudioData);
   }, [state.isPlaying, generateSimulatedAudioData]);
-
-  // Fallback simulated audio data
-  const generateSimulatedAudioData = useCallback(() => {
-    if (state.isPlaying) {
-      // Generate realistic audio visualization data
-      const frequencies = new Uint8Array(128);
-      const time = Date.now() / 1000;
-      
-      for (let i = 0; i < frequencies.length; i++) {
-        frequencies[i] = Math.sin(time * 2 + i * 0.1) * 50 + 100 + Math.random() * 30;
-      }
-
-      const bassLevel = Math.sin(time * 3) * 0.3 + 0.5;
-      const midLevel = Math.sin(time * 2.5) * 0.3 + 0.5;
-      const trebleLevel = Math.sin(time * 4) * 0.3 + 0.5;
-
-      setState(prev => ({
-        ...prev,
-        audioData: {
-          frequencies,
-          volume: 0.6,
-          bassLevel,
-          midLevel,
-          trebleLevel,
-        }
-      }));
-    } else {
-      // Silent state
-      setState(prev => ({
-        ...prev,
-        audioData: {
-          frequencies: new Uint8Array(128),
-          volume: 0,
-          bassLevel: 0,
-          midLevel: 0,
-          trebleLevel: 0,
-        }
-      }));
-    }
-  }, [state.isPlaying]);
 
   // Control playback - prefer Web Playback SDK, fallback to API
   const togglePlayback = useCallback(async () => {
