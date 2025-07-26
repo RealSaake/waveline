@@ -254,24 +254,97 @@ export function useSpotifyPlayer() {
     }
   }, []);
 
-  // User-triggered audio activation
+  // User-triggered audio activation with proper sequencing
   const activateAudio = useCallback(async () => {
-    console.log('User activated audio - initializing audio context...');
-    await initializeAudioContext();
+    console.log('User activated audio - starting activation sequence...');
     
-    // If we have a device ID but haven't transferred playback yet, do it now
-    if (deviceIdRef.current) {
-      const transferred = await transferPlaybackToDevice(deviceIdRef.current);
-      if (transferred) {
-        console.log('Playback transferred - Web Playback SDK controls now active!');
+    try {
+      // Step 1: Initialize audio context
+      await initializeAudioContext();
+      console.log('✓ Audio context initialized');
+      
+      // Step 2: Transfer playback if we have a device
+      if (deviceIdRef.current) {
+        console.log('Transferring playback to Web Playback SDK...');
+        const transferred = await transferPlaybackToDevice(deviceIdRef.current);
+        if (transferred) {
+          console.log('✓ Playback transferred successfully');
+          
+          // Step 3: Wait a moment for Spotify to create the audio element
+          console.log('Waiting for Spotify to initialize audio element...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Step 4: Connect audio analyser
+          if (playerRef.current) {
+            console.log('Connecting audio analyser...');
+            await connectAudioAnalyser(playerRef.current);
+          }
+        } else {
+          console.warn('Playback transfer failed, trying audio connection anyway...');
+          if (playerRef.current) {
+            await connectAudioAnalyser(playerRef.current);
+          }
+        }
+      } else {
+        console.log('No device ID available, trying direct audio connection...');
+        if (playerRef.current) {
+          await connectAudioAnalyser(playerRef.current);
+        }
+      }
+      
+      console.log('Audio activation sequence completed');
+      
+    } catch (error) {
+      console.error('Audio activation failed:', error);
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Audio activation failed - using simulated data' 
+      }));
+    }
+  }, [initializeAudioContext, transferPlaybackToDevice, connectAudioAnalyser]);
+
+  // Wait for audio element to appear with proper retry logic
+  const waitForAudioElement = useCallback(async (maxAttempts = 10, delayMs = 1000): Promise<HTMLAudioElement | null> => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`Looking for audio element (attempt ${attempt}/${maxAttempts})...`);
+      
+      // Search for audio elements in DOM
+      const audioElements = document.querySelectorAll('audio');
+      
+      if (audioElements.length > 0) {
+        // Find the best audio element (prefer one with src or that's playing)
+        let bestElement: HTMLAudioElement | null = null;
+        
+        for (const element of audioElements) {
+          if (element.src && element.src.includes('spotify')) {
+            bestElement = element;
+            break;
+          } else if (element.src || !element.paused) {
+            bestElement = element;
+          }
+        }
+        
+        // Fallback to first audio element
+        if (!bestElement && audioElements.length > 0) {
+          bestElement = audioElements[0];
+        }
+        
+        if (bestElement) {
+          console.log(`Found audio element on attempt ${attempt}:`, bestElement);
+          return bestElement;
+        }
+      }
+      
+      // Wait before next attempt (except on last attempt)
+      if (attempt < maxAttempts) {
+        console.log(`No audio element found, waiting ${delayMs}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
     
-    // Try to connect to existing player if available
-    if (playerRef.current) {
-      setTimeout(() => connectAudioAnalyser(playerRef.current!), 500);
-    }
-  }, [initializeAudioContext, transferPlaybackToDevice]);
+    console.warn('No audio element found after all attempts');
+    return null;
+  }, []);
 
   // Connect Spotify player to Web Audio API
   const connectAudioAnalyser = useCallback(async (player?: SpotifyPlayer) => {
@@ -287,65 +360,12 @@ export function useSpotifyPlayer() {
         return;
       }
 
-      // More aggressive audio element detection
-      const findAudioElement = async (): Promise<HTMLAudioElement | null> => {
-        let audioElement: HTMLAudioElement | null = null;
-
-        // Method 1: Try to get from Spotify player (multiple possible locations)
-        if (player) {
-          const possiblePaths = [
-            (player as any)._options?.getAudioElement?.(),
-            (player as any)._audioElement,
-            (player as any)._player?._html5Audio,
-            (player as any).getHTMLAudioElement?.(),
-            (player as any)._internal?.audioElement,
-          ];
-          
-          for (const element of possiblePaths) {
-            if (element && element.tagName === 'AUDIO') {
-              audioElement = element;
-              break;
-            }
-          }
-        }
-
-        // Method 2: Search DOM for audio elements
-        if (!audioElement) {
-          const audioElements = document.querySelectorAll('audio');
-          if (audioElements.length > 0) {
-            // Prefer audio elements with src or that are playing
-            for (const element of audioElements) {
-              if (element.src || !element.paused) {
-                audioElement = element;
-                break;
-              }
-            }
-            // Fallback to first audio element
-            if (!audioElement) {
-              audioElement = audioElements[0];
-            }
-          }
-        }
-
-        // Method 3: Wait and retry (Spotify creates elements asynchronously)
-        if (!audioElement) {
-          console.log('No audio element found, waiting and retrying...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          const audioElements = document.querySelectorAll('audio');
-          if (audioElements.length > 0) {
-            audioElement = audioElements[0];
-          }
-        }
-
-        return audioElement;
-      };
-
-      const audioElement = await findAudioElement();
+      // Wait for audio element to appear
+      const audioElement = await waitForAudioElement();
 
       if (audioElement) {
         try {
-          console.log('Found audio element:', audioElement);
+          console.log('Connecting audio element to analyser...');
           
           // Create audio source from the HTML5 audio element
           sourceRef.current = audioContextRef.current.createMediaElementSource(audioElement);
@@ -362,12 +382,17 @@ export function useSpotifyPlayer() {
         } catch (sourceError) {
           console.warn('Failed to create media source:', sourceError);
           // This can happen if the element is already connected to another source
-          // Try to find if there's another audio element
-          const allAudioElements = document.querySelectorAll('audio');
-          console.log('All audio elements found:', allAudioElements.length);
+          setState(prev => ({ 
+            ...prev, 
+            error: 'Audio element already in use - using simulated data' 
+          }));
         }
       } else {
-        console.warn('No audio element found for analysis after all attempts');
+        console.warn('No audio element found - using simulated visualization');
+        setState(prev => ({ 
+          ...prev, 
+          error: 'No audio element found - using simulated data' 
+        }));
       }
     } catch (error) {
       console.error('Failed to connect audio analyser:', error);
@@ -376,19 +401,9 @@ export function useSpotifyPlayer() {
         error: 'Audio analysis unavailable - using simulated data' 
       }));
     }
-  }, [initializeAudioContext]);
+  }, [waitForAudioElement]);
 
-  // Try to connect to any available audio periodically (only if audio context is ready)
-  const tryConnectToAudio = useCallback(async () => {
-    if (sourceRef.current || !audioContextRef.current) return; // Already connected or no audio context
-    
-    const audioElements = document.querySelectorAll('audio');
-    
-    if (audioElements.length > 0) {
-      console.log('Attempting to connect to audio element...');
-      await connectAudioAnalyser(playerRef.current || undefined);
-    }
-  }, [connectAudioAnalyser]);
+
 
   // Initialize Spotify Web Playback SDK Player
   const initializePlayer = useCallback(async () => {
@@ -439,7 +454,7 @@ export function useSpotifyPlayer() {
         setState(prev => ({ ...prev, isConnected: false }));
       });
 
-      player.addListener('player_state_changed', (state) => {
+      player.addListener('player_state_changed', async (state) => {
         if (!state) return;
 
         const track = state.track_window.current_track;
@@ -462,7 +477,10 @@ export function useSpotifyPlayer() {
         // Try to connect audio analyser when music starts playing (only if audio context is ready)
         if (!state.paused && !sourceRef.current && audioContextRef.current) {
           console.log('Music started playing, attempting audio connection...');
-          setTimeout(() => connectAudioAnalyser(player), 1000);
+          // Give Spotify more time to create the audio element when playback starts
+          setTimeout(async () => {
+            await connectAudioAnalyser(player);
+          }, 2000);
         }
       });
 
@@ -737,15 +755,6 @@ export function useSpotifyPlayer() {
       
       // Start audio data updates
       updateAudioData();
-
-      // Periodically try to connect to audio if not already connected (only after user interaction)
-      const audioCheckInterval = setInterval(() => {
-        if (state.audioContextReady) {
-          tryConnectToAudio();
-        }
-      }, 2000);
-      
-      return () => clearInterval(audioCheckInterval);
     };
 
     initialize();
