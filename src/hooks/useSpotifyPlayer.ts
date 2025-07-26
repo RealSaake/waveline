@@ -117,6 +117,7 @@ export function useSpotifyPlayer() {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const sdkLoadedRef = useRef<boolean>(false);
   const deviceIdRef = useRef<string | null>(null);
+  const audioConnectionAttemptRef = useRef<boolean>(false);
 
   // Fetch current track from Spotify API
   const fetchCurrentTrack = useCallback(async () => {
@@ -256,41 +257,90 @@ export function useSpotifyPlayer() {
 
 
 
-  // Wait for audio element to appear with proper retry logic
-  const waitForAudioElement = useCallback(async (maxAttempts = 10, delayMs = 1000): Promise<HTMLAudioElement | null> => {
+  // Wait for audio element to appear with improved detection
+  const waitForAudioElement = useCallback(async (maxAttempts = 15, delayMs = 500): Promise<HTMLAudioElement | null> => {
+    console.log('Starting audio element detection...');
+    
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       console.log(`Looking for audio element (attempt ${attempt}/${maxAttempts})...`);
       
-      // Search for audio elements in DOM
+      // Search for audio elements in DOM with more comprehensive detection
       const audioElements = document.querySelectorAll('audio');
+      console.log(`Found ${audioElements.length} audio elements in DOM`);
       
       if (audioElements.length > 0) {
-        // Find the best audio element (prefer one with src or that's playing)
+        // Log all found elements for debugging
+        audioElements.forEach((el, index) => {
+          console.log(`Audio element ${index}:`, {
+            src: el.src,
+            currentSrc: el.currentSrc,
+            paused: el.paused,
+            readyState: el.readyState,
+            networkState: el.networkState,
+            duration: el.duration,
+            tagName: el.tagName
+          });
+        });
+        
+        // Find the best audio element with improved logic
         let bestElement: HTMLAudioElement | null = null;
         
+        // Priority 1: Audio element with Spotify-related src
         for (const element of audioElements) {
-          if (element.src && element.src.includes('spotify')) {
+          if (element.src && (element.src.includes('spotify') || element.src.includes('scdn.co'))) {
+            console.log('Found Spotify audio element by src');
             bestElement = element;
             break;
-          } else if (element.src || !element.paused) {
+          }
+          if (element.currentSrc && (element.currentSrc.includes('spotify') || element.currentSrc.includes('scdn.co'))) {
+            console.log('Found Spotify audio element by currentSrc');
             bestElement = element;
+            break;
           }
         }
         
-        // Fallback to first audio element
+        // Priority 2: Audio element that's not paused or has content
+        if (!bestElement) {
+          for (const element of audioElements) {
+            if (!element.paused || element.readyState > 0 || element.duration > 0) {
+              console.log('Found active audio element');
+              bestElement = element;
+              break;
+            }
+          }
+        }
+        
+        // Priority 3: Any audio element with a src
+        if (!bestElement) {
+          for (const element of audioElements) {
+            if (element.src || element.currentSrc) {
+              console.log('Found audio element with src');
+              bestElement = element;
+              break;
+            }
+          }
+        }
+        
+        // Priority 4: First audio element as fallback
         if (!bestElement && audioElements.length > 0) {
+          console.log('Using first audio element as fallback');
           bestElement = audioElements[0];
         }
         
         if (bestElement) {
-          console.log(`Found audio element on attempt ${attempt}:`, bestElement);
+          console.log(`✓ Selected audio element on attempt ${attempt}:`, {
+            src: bestElement.src,
+            currentSrc: bestElement.currentSrc,
+            paused: bestElement.paused,
+            readyState: bestElement.readyState
+          });
           return bestElement;
         }
       }
       
       // Wait before next attempt (except on last attempt)
       if (attempt < maxAttempts) {
-        console.log(`No audio element found, waiting ${delayMs}ms before retry...`);
+        console.log(`No suitable audio element found, waiting ${delayMs}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
@@ -313,12 +363,21 @@ export function useSpotifyPlayer() {
         return;
       }
 
-      // Wait for audio element to appear
+      // Prevent multiple simultaneous connection attempts
+      if (audioConnectionAttemptRef.current) {
+        console.log('Audio connection attempt already in progress, skipping...');
+        return;
+      }
+
+      audioConnectionAttemptRef.current = true;
+      console.log('Attempting to connect audio analyser...');
+
+      // Method 1: Try to find and connect to audio element
       const audioElement = await waitForAudioElement();
 
       if (audioElement) {
         try {
-          console.log('Connecting audio element to analyser...');
+          console.log('Attempting to connect audio element to analyser...');
           
           // Create audio source from the HTML5 audio element
           sourceRef.current = audioContextRef.current.createMediaElementSource(audioElement);
@@ -327,32 +386,63 @@ export function useSpotifyPlayer() {
           sourceRef.current.connect(analyserRef.current);
           analyserRef.current.connect(audioContextRef.current.destination);
           
-          console.log('Audio analyser connected successfully!');
+          console.log('✓ Audio analyser connected successfully to real audio!');
           
           // Update state to reflect real audio connection
           setState(prev => ({ ...prev, error: null }));
+          return;
           
         } catch (sourceError) {
-          console.warn('Failed to create media source:', sourceError);
-          // This can happen if the element is already connected to another source
+          console.warn('Failed to create media source from audio element:', sourceError);
+          // Clear the failed source reference
+          sourceRef.current = null;
+        }
+      }
+
+      // Method 2: Try alternative approach using getUserMedia (if available)
+      console.log('Trying alternative audio capture method...');
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          // This won't work for Spotify audio, but let's try system audio
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false
+            } 
+          });
+          
+          const source = audioContextRef.current.createMediaStreamSource(stream);
+          source.connect(analyserRef.current);
+          analyserRef.current.connect(audioContextRef.current.destination);
+          
+          console.log('✓ Connected to microphone audio as fallback');
           setState(prev => ({ 
             ...prev, 
-            error: 'Audio element already in use - using simulated data' 
+            error: 'Using microphone audio - play music loudly for visualization' 
           }));
+          return;
         }
-      } else {
-        console.warn('No audio element found - using simulated visualization');
-        setState(prev => ({ 
-          ...prev, 
-          error: 'No audio element found - using simulated data' 
-        }));
+      } catch (micError) {
+        console.warn('Microphone access failed:', micError);
       }
+
+      // Method 3: Fallback to simulated data
+      console.warn('All audio connection methods failed - using simulated visualization');
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Real audio unavailable - using simulated visualization' 
+      }));
+
     } catch (error) {
       console.error('Failed to connect audio analyser:', error);
       setState(prev => ({ 
         ...prev, 
         error: 'Audio analysis unavailable - using simulated data' 
       }));
+    } finally {
+      // Reset the connection attempt flag
+      audioConnectionAttemptRef.current = false;
     }
   }, [waitForAudioElement]);
 
