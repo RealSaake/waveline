@@ -230,7 +230,7 @@ export function useSpotifyPlayer() {
     try {
       console.log('Transferring playback to device:', deviceId);
       
-      const response = await fetch('/api/spotify/me/player/transfer', {
+      const response = await fetch('/api/spotify/me/player', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -286,17 +286,18 @@ export function useSpotifyPlayer() {
       console.log('Attempting to capture tab audio with getDisplayMedia...');
       try {
         if ('getDisplayMedia' in navigator.mediaDevices) {
-          // Request tab audio capture
+          // Request tab audio capture (video required by browsers for security)
           const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: false,
+            video: true, // Required by browsers even if we don't use it
             audio: {
               echoCancellation: false,
               noiseSuppression: false,
               autoGainControl: false,
               sampleRate: 44100,
               channelCount: 2
-            } as any
-          });
+            },
+            preferCurrentTab: true // Prioritize current tab
+          } as any);
           
           if (stream.getAudioTracks().length > 0) {
             console.log('✓ Got tab audio stream, connecting to analyser...');
@@ -794,7 +795,7 @@ export function useSpotifyPlayer() {
       if (playerRef.current) {
         playerRef.current.disconnect();
       }
-      if (audioContextRef.current) {
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close();
       }
     };
