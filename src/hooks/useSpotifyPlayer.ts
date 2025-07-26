@@ -254,54 +254,7 @@ export function useSpotifyPlayer() {
     }
   }, []);
 
-  // User-triggered audio activation with proper sequencing
-  const activateAudio = useCallback(async () => {
-    console.log('User activated audio - starting activation sequence...');
-    
-    try {
-      // Step 1: Initialize audio context
-      await initializeAudioContext();
-      console.log('✓ Audio context initialized');
-      
-      // Step 2: Transfer playback if we have a device
-      if (deviceIdRef.current) {
-        console.log('Transferring playback to Web Playback SDK...');
-        const transferred = await transferPlaybackToDevice(deviceIdRef.current);
-        if (transferred) {
-          console.log('✓ Playback transferred successfully');
-          
-          // Step 3: Wait a moment for Spotify to create the audio element
-          console.log('Waiting for Spotify to initialize audio element...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Step 4: Connect audio analyser
-          if (playerRef.current) {
-            console.log('Connecting audio analyser...');
-            await connectAudioAnalyser(playerRef.current);
-          }
-        } else {
-          console.warn('Playback transfer failed, trying audio connection anyway...');
-          if (playerRef.current) {
-            await connectAudioAnalyser(playerRef.current);
-          }
-        }
-      } else {
-        console.log('No device ID available, trying direct audio connection...');
-        if (playerRef.current) {
-          await connectAudioAnalyser(playerRef.current);
-        }
-      }
-      
-      console.log('Audio activation sequence completed');
-      
-    } catch (error) {
-      console.error('Audio activation failed:', error);
-      setState(prev => ({ 
-        ...prev, 
-        error: 'Audio activation failed - using simulated data' 
-      }));
-    }
-  }, [initializeAudioContext, transferPlaybackToDevice, connectAudioAnalyser]);
+
 
   // Wait for audio element to appear with proper retry logic
   const waitForAudioElement = useCallback(async (maxAttempts = 10, delayMs = 1000): Promise<HTMLAudioElement | null> => {
@@ -403,7 +356,54 @@ export function useSpotifyPlayer() {
     }
   }, [waitForAudioElement]);
 
-
+  // User-triggered audio activation with proper sequencing
+  const activateAudio = useCallback(async () => {
+    console.log('User activated audio - starting activation sequence...');
+    
+    try {
+      // Step 1: Initialize audio context
+      await initializeAudioContext();
+      console.log('✓ Audio context initialized');
+      
+      // Step 2: Transfer playback if we have a device
+      if (deviceIdRef.current) {
+        console.log('Transferring playback to Web Playback SDK...');
+        const transferred = await transferPlaybackToDevice(deviceIdRef.current);
+        if (transferred) {
+          console.log('✓ Playback transferred successfully');
+          
+          // Step 3: Wait a moment for Spotify to create the audio element
+          console.log('Waiting for Spotify to initialize audio element...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Step 4: Connect audio analyser
+          if (playerRef.current) {
+            console.log('Connecting audio analyser...');
+            await connectAudioAnalyser(playerRef.current);
+          }
+        } else {
+          console.warn('Playback transfer failed, trying audio connection anyway...');
+          if (playerRef.current) {
+            await connectAudioAnalyser(playerRef.current);
+          }
+        }
+      } else {
+        console.log('No device ID available, trying direct audio connection...');
+        if (playerRef.current) {
+          await connectAudioAnalyser(playerRef.current);
+        }
+      }
+      
+      console.log('Audio activation sequence completed');
+      
+    } catch (error) {
+      console.error('Audio activation failed:', error);
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Audio activation failed - using simulated data' 
+      }));
+    }
+  }, [initializeAudioContext, transferPlaybackToDevice, connectAudioAnalyser]);
 
   // Initialize Spotify Web Playback SDK Player
   const initializePlayer = useCallback(async () => {
@@ -524,7 +524,7 @@ export function useSpotifyPlayer() {
       // Fall back to API-based approach
       await initializeAudioContext();
     }
-  }, [getAccessToken, state.volume, initializeSpotifySDK, connectAudioAnalyser]);
+  }, [getAccessToken, initializeSpotifySDK, connectAudioAnalyser, transferPlaybackToDevice]);
 
 
 
@@ -589,7 +589,7 @@ export function useSpotifyPlayer() {
     }
 
     animationFrameRef.current = requestAnimationFrame(updateAudioData);
-  }, [state.isPlaying]);
+  }, [state.isPlaying, generateSimulatedAudioData]);
 
   // Fallback simulated audio data
   const generateSimulatedAudioData = useCallback(() => {
