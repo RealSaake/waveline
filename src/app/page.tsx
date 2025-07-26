@@ -30,25 +30,25 @@ export default function Home() {
               AUDIO • VISUALIZATION • PERFECTION
             </div>
           </motion.div>
-          
-          <motion.p 
+
+          <motion.p
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.8 }}
             className="text-xl md:text-2xl text-gray-300 mb-12 max-w-4xl mx-auto leading-relaxed"
           >
-            The most <span className="text-purple-400 font-bold">insane audio visualizer</span> ever created. 
+            The most <span className="text-purple-400 font-bold">insane audio visualizer</span> ever created.
             Real-time particle systems, beat detection, and mind-bending visual effects that sync perfectly with your music.
           </motion.p>
-          
-          <motion.div 
+
+          <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.8 }}
             className="flex gap-6 justify-center flex-wrap mb-16"
           >
-            <Link 
-              href="/live" 
+            <Link
+              href="/live"
               className="group px-12 py-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xl rounded-2xl transition-all transform hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/25"
             >
               <span className="flex items-center gap-3">
@@ -58,9 +58,9 @@ export default function Home() {
                 </svg>
               </span>
             </Link>
-            
-            <Link 
-              href="/upload" 
+
+            <Link
+              href="/upload"
               prefetch={false}
               className="px-12 py-6 bg-white/10 hover:bg-white/20 backdrop-blur-lg text-white font-bold text-xl rounded-2xl border border-white/20 transition-all transform hover:scale-105"
             >
@@ -77,7 +77,7 @@ export default function Home() {
             { icon: '🌌', title: 'Galaxy Mode', desc: 'Spiral galaxies that pulse with bass drops' },
             { icon: '🧠', title: 'Neural Network', desc: 'AI-powered connections that visualize harmony' }
           ].map((feature, i) => (
-            <motion.div 
+            <motion.div
               key={i}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -92,7 +92,7 @@ export default function Home() {
         </div>
 
         {/* Tech Specs */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.2, duration: 0.8 }}
@@ -119,23 +119,23 @@ export default function Home() {
         </motion.div>
 
         {/* CTA Section */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 1.4, duration: 0.8 }}
           className="text-center"
         >
           <h2 className="text-5xl font-black text-white mb-6">
-            Ready to have your 
+            Ready to have your
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400"> mind blown</span>?
           </h2>
           <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto">
-            Connect your Spotify and experience audio visualization like never before. 
+            Connect your Spotify and experience audio visualization like never before.
             This isn't just a visualizer – it's digital synesthesia.
           </p>
-          
-          <Link 
-            href="/live" 
+
+          <Link
+            href="/live"
             className="group inline-block px-16 py-8 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 hover:from-purple-500 hover:via-pink-500 hover:to-blue-500 text-white font-black text-2xl rounded-3xl transition-all transform hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/30"
           >
             <span className="flex items-center gap-4">
@@ -143,7 +143,7 @@ export default function Home() {
               <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
             </span>
           </Link>
-          
+
           <div className="mt-8 text-gray-400 text-sm">
             No signup required • Works in any browser • Completely free
           </div>
