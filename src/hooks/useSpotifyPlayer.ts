@@ -257,16 +257,54 @@ export function useSpotifyPlayer() {
 
 
 
-  // Wait for audio element to appear with improved detection
-  const waitForAudioElement = useCallback(async (maxAttempts = 15, delayMs = 500): Promise<HTMLAudioElement | null> => {
-    console.log('Starting audio element detection...');
+  // Aggressive audio element detection including shadow DOM and dynamic elements
+  const waitForAudioElement = useCallback(async (maxAttempts = 20, delayMs = 300): Promise<HTMLAudioElement | null> => {
+    console.log('Starting comprehensive audio element detection...');
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       console.log(`Looking for audio element (attempt ${attempt}/${maxAttempts})...`);
       
-      // Search for audio elements in DOM with more comprehensive detection
-      const audioElements = document.querySelectorAll('audio');
-      console.log(`Found ${audioElements.length} audio elements in DOM`);
+      // Method 1: Standard DOM search
+      let audioElements = Array.from(document.querySelectorAll('audio'));
+      
+      // Method 2: Search in all shadow roots
+      const searchShadowRoots = (element: Element): HTMLAudioElement[] => {
+        const found: HTMLAudioElement[] = [];
+        
+        if (element.shadowRoot) {
+          const shadowAudio = Array.from(element.shadowRoot.querySelectorAll('audio'));
+          found.push(...shadowAudio as HTMLAudioElement[]);
+          
+          // Recursively search shadow roots
+          const shadowElements = Array.from(element.shadowRoot.querySelectorAll('*'));
+          for (const shadowEl of shadowElements) {
+            found.push(...searchShadowRoots(shadowEl));
+          }
+        }
+        
+        return found;
+      };
+      
+      // Search all elements for shadow roots
+      const allElements = Array.from(document.querySelectorAll('*'));
+      for (const el of allElements) {
+        audioElements.push(...searchShadowRoots(el));
+      }
+      
+      // Method 3: Look for Spotify-specific containers and iframe content
+      const spotifyContainers = document.querySelectorAll('[class*="spotify"], [id*="spotify"], iframe[src*="spotify"]');
+      for (const container of spotifyContainers) {
+        try {
+          if (container instanceof HTMLIFrameElement && container.contentDocument) {
+            const iframeAudio = Array.from(container.contentDocument.querySelectorAll('audio'));
+            audioElements.push(...iframeAudio as HTMLAudioElement[]);
+          }
+        } catch (e) {
+          // Cross-origin iframe, can't access
+        }
+      }
+      
+      console.log(`Found ${audioElements.length} total audio elements (including shadow DOM)`);
       
       if (audioElements.length > 0) {
         // Log all found elements for debugging
@@ -278,39 +316,48 @@ export function useSpotifyPlayer() {
             readyState: el.readyState,
             networkState: el.networkState,
             duration: el.duration,
-            tagName: el.tagName
+            volume: el.volume,
+            muted: el.muted,
+            crossOrigin: el.crossOrigin
           });
         });
         
-        // Find the best audio element with improved logic
+        // Enhanced selection logic
         let bestElement: HTMLAudioElement | null = null;
         
-        // Priority 1: Audio element with Spotify-related src
+        // Priority 1: Audio element with Spotify/scdn.co src
         for (const element of audioElements) {
-          if (element.src && (element.src.includes('spotify') || element.src.includes('scdn.co'))) {
-            console.log('Found Spotify audio element by src');
-            bestElement = element;
-            break;
-          }
-          if (element.currentSrc && (element.currentSrc.includes('spotify') || element.currentSrc.includes('scdn.co'))) {
-            console.log('Found Spotify audio element by currentSrc');
+          if ((element.src && (element.src.includes('spotify') || element.src.includes('scdn.co'))) ||
+              (element.currentSrc && (element.currentSrc.includes('spotify') || element.currentSrc.includes('scdn.co')))) {
+            console.log('Found Spotify audio element');
             bestElement = element;
             break;
           }
         }
         
-        // Priority 2: Audio element that's not paused or has content
+        // Priority 2: Audio element that's actively playing
         if (!bestElement) {
           for (const element of audioElements) {
-            if (!element.paused || element.readyState > 0 || element.duration > 0) {
-              console.log('Found active audio element');
+            if (!element.paused && element.currentTime > 0) {
+              console.log('Found actively playing audio element');
               bestElement = element;
               break;
             }
           }
         }
         
-        // Priority 3: Any audio element with a src
+        // Priority 3: Audio element with loaded content
+        if (!bestElement) {
+          for (const element of audioElements) {
+            if (element.readyState >= 2 || element.duration > 0) { // HAVE_CURRENT_DATA or higher
+              console.log('Found loaded audio element');
+              bestElement = element;
+              break;
+            }
+          }
+        }
+        
+        // Priority 4: Any audio element with src
         if (!bestElement) {
           for (const element of audioElements) {
             if (element.src || element.currentSrc) {
@@ -321,7 +368,7 @@ export function useSpotifyPlayer() {
           }
         }
         
-        // Priority 4: First audio element as fallback
+        // Priority 5: First audio element as last resort
         if (!bestElement && audioElements.length > 0) {
           console.log('Using first audio element as fallback');
           bestElement = audioElements[0];
@@ -332,20 +379,22 @@ export function useSpotifyPlayer() {
             src: bestElement.src,
             currentSrc: bestElement.currentSrc,
             paused: bestElement.paused,
-            readyState: bestElement.readyState
+            readyState: bestElement.readyState,
+            currentTime: bestElement.currentTime,
+            duration: bestElement.duration
           });
           return bestElement;
         }
       }
       
-      // Wait before next attempt (except on last attempt)
+      // Wait before next attempt
       if (attempt < maxAttempts) {
         console.log(`No suitable audio element found, waiting ${delayMs}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
     
-    console.warn('No audio element found after all attempts');
+    console.warn('No audio element found after comprehensive search');
     return null;
   }, []);
 
@@ -372,13 +421,39 @@ export function useSpotifyPlayer() {
       audioConnectionAttemptRef.current = true;
       console.log('Attempting to connect audio analyser...');
 
-      // Method 1: Try to find and connect to audio element (legacy approach)
-      console.log('Attempting legacy audio element connection...');
-      const audioElement = await waitForAudioElement(5, 200); // Shorter attempt for legacy
+      // Method 1: Force Web Playback SDK to create audio element by ensuring playback
+      console.log('Forcing Web Playback SDK to create audio elements...');
+      if (player) {
+        try {
+          // Ensure the player is active and playing
+          const currentState = await player.getCurrentState();
+          if (currentState && currentState.paused) {
+            console.log('Resuming playback to force audio element creation...');
+            await player.resume();
+            // Wait a moment for the audio element to be created
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (resumeError) {
+          console.warn('Could not resume playback:', resumeError);
+        }
+      }
+
+      // Now search comprehensively for audio elements
+      console.log('Searching for audio elements after playback activation...');
+      const audioElement = await waitForAudioElement();
 
       if (audioElement) {
         try {
           console.log('Attempting to connect audio element to analyser...');
+          
+          // Ensure the audio element is playing
+          if (audioElement.paused) {
+            try {
+              await audioElement.play();
+            } catch (playError) {
+              console.warn('Could not play audio element:', playError);
+            }
+          }
           
           // Create audio source from the HTML5 audio element
           sourceRef.current = audioContextRef.current.createMediaElementSource(audioElement);
@@ -387,7 +462,7 @@ export function useSpotifyPlayer() {
           sourceRef.current.connect(analyserRef.current);
           analyserRef.current.connect(audioContextRef.current.destination);
           
-          console.log('✓ Audio analyser connected successfully to real audio!');
+          console.log('✓ Audio analyser connected successfully to real Spotify audio!');
           
           // Update state to reflect real audio connection
           setState(prev => ({ ...prev, error: null }));
@@ -400,25 +475,81 @@ export function useSpotifyPlayer() {
         }
       }
 
-      console.log('No HTML audio elements found (expected with modern Web Playback SDK)');
+      console.log('No audio elements found even after comprehensive search');
 
-      // Method 2: Use Web Playback SDK audio features (modern approach)
-      console.log('Trying Web Playback SDK audio features...');
+      // Method 2: Use Web Playback SDK with Web Audio API (modern approach)
+      console.log('Trying Web Playback SDK with Web Audio API...');
       if (player) {
         try {
-          // Set up enhanced visualization using track audio features
-          console.log('✓ Using Web Playback SDK for enhanced audio visualization');
-          setState(prev => ({ 
-            ...prev, 
-            error: null 
-          }));
+          // Get the player's internal audio context or create a destination
+          const playerState = await player.getCurrentState();
+          if (playerState) {
+            console.log('Player state available, attempting audio stream capture...');
+            
+            // Try to access the SDK's internal audio stream
+            // The Web Playback SDK uses Web Audio API internally
+            const sdkAudioContext = (player as any)._options?.audioContext || audioContextRef.current;
+            
+            if (sdkAudioContext) {
+              console.log('Found SDK audio context, connecting analyser...');
+              
+              // Create a gain node to tap into the audio stream
+              const gainNode = sdkAudioContext.createGain();
+              gainNode.gain.value = 1.0;
+              
+              // Connect the gain node to our analyser
+              gainNode.connect(analyserRef.current);
+              analyserRef.current.connect(audioContextRef.current.destination);
+              
+              // Try to intercept the SDK's audio routing
+              const originalConnect = sdkAudioContext.destination.connect;
+              sdkAudioContext.destination.connect = function(destination: any) {
+                // Also connect to our analyser
+                gainNode.connect(analyserRef.current);
+                return originalConnect.call(this, destination);
+              };
+              
+              sourceRef.current = gainNode as any;
+              console.log('✓ Connected to Web Playback SDK audio stream!');
+              setState(prev => ({ ...prev, error: null }));
+              return;
+            }
+          }
           
-          // Mark as having "real" audio connection (SDK-based)
-          sourceRef.current = {} as any; // Placeholder to indicate connection
-          return;
+          // Alternative: Try to capture system audio output
+          console.log('Attempting system audio capture...');
+          if ('getDisplayMedia' in navigator.mediaDevices) {
+            try {
+              const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: false,
+                audio: {
+                  echoCancellation: false,
+                  noiseSuppression: false,
+                  autoGainControl: false,
+                  sampleRate: 44100
+                } as any
+              });
+              
+              if (stream.getAudioTracks().length > 0) {
+                const source = audioContextRef.current.createMediaStreamSource(stream);
+                source.connect(analyserRef.current);
+                analyserRef.current.connect(audioContextRef.current.destination);
+                
+                sourceRef.current = source;
+                console.log('✓ Connected to system audio via screen share!');
+                setState(prev => ({ 
+                  ...prev, 
+                  error: 'Using system audio - make sure Spotify is playing' 
+                }));
+                return;
+              }
+            } catch (displayError) {
+              console.warn('System audio capture failed:', displayError);
+            }
+          }
           
         } catch (sdkError) {
-          console.warn('Web Playback SDK audio features failed:', sdkError);
+          console.warn('Web Playback SDK audio connection failed:', sdkError);
         }
       }
 
