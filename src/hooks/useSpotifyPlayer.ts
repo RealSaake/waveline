@@ -257,148 +257,9 @@ export function useSpotifyPlayer() {
 
 
 
-  // Aggressive audio element detection including shadow DOM and dynamic elements
-  const waitForAudioElement = useCallback(async (maxAttempts = 20, delayMs = 300): Promise<HTMLAudioElement | null> => {
-    console.log('Starting comprehensive audio element detection...');
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      console.log(`Looking for audio element (attempt ${attempt}/${maxAttempts})...`);
-      
-      // Method 1: Standard DOM search
-      let audioElements = Array.from(document.querySelectorAll('audio'));
-      
-      // Method 2: Search in all shadow roots
-      const searchShadowRoots = (element: Element): HTMLAudioElement[] => {
-        const found: HTMLAudioElement[] = [];
-        
-        if (element.shadowRoot) {
-          const shadowAudio = Array.from(element.shadowRoot.querySelectorAll('audio'));
-          found.push(...shadowAudio as HTMLAudioElement[]);
-          
-          // Recursively search shadow roots
-          const shadowElements = Array.from(element.shadowRoot.querySelectorAll('*'));
-          for (const shadowEl of shadowElements) {
-            found.push(...searchShadowRoots(shadowEl));
-          }
-        }
-        
-        return found;
-      };
-      
-      // Search all elements for shadow roots
-      const allElements = Array.from(document.querySelectorAll('*'));
-      for (const el of allElements) {
-        audioElements.push(...searchShadowRoots(el));
-      }
-      
-      // Method 3: Look for Spotify-specific containers and iframe content
-      const spotifyContainers = document.querySelectorAll('[class*="spotify"], [id*="spotify"], iframe[src*="spotify"]');
-      for (const container of spotifyContainers) {
-        try {
-          if (container instanceof HTMLIFrameElement && container.contentDocument) {
-            const iframeAudio = Array.from(container.contentDocument.querySelectorAll('audio'));
-            audioElements.push(...iframeAudio as HTMLAudioElement[]);
-          }
-        } catch (e) {
-          // Cross-origin iframe, can't access
-        }
-      }
-      
-      console.log(`Found ${audioElements.length} total audio elements (including shadow DOM)`);
-      
-      if (audioElements.length > 0) {
-        // Log all found elements for debugging
-        audioElements.forEach((el, index) => {
-          console.log(`Audio element ${index}:`, {
-            src: el.src,
-            currentSrc: el.currentSrc,
-            paused: el.paused,
-            readyState: el.readyState,
-            networkState: el.networkState,
-            duration: el.duration,
-            volume: el.volume,
-            muted: el.muted,
-            crossOrigin: el.crossOrigin
-          });
-        });
-        
-        // Enhanced selection logic
-        let bestElement: HTMLAudioElement | null = null;
-        
-        // Priority 1: Audio element with Spotify/scdn.co src
-        for (const element of audioElements) {
-          if ((element.src && (element.src.includes('spotify') || element.src.includes('scdn.co'))) ||
-              (element.currentSrc && (element.currentSrc.includes('spotify') || element.currentSrc.includes('scdn.co')))) {
-            console.log('Found Spotify audio element');
-            bestElement = element;
-            break;
-          }
-        }
-        
-        // Priority 2: Audio element that's actively playing
-        if (!bestElement) {
-          for (const element of audioElements) {
-            if (!element.paused && element.currentTime > 0) {
-              console.log('Found actively playing audio element');
-              bestElement = element;
-              break;
-            }
-          }
-        }
-        
-        // Priority 3: Audio element with loaded content
-        if (!bestElement) {
-          for (const element of audioElements) {
-            if (element.readyState >= 2 || element.duration > 0) { // HAVE_CURRENT_DATA or higher
-              console.log('Found loaded audio element');
-              bestElement = element;
-              break;
-            }
-          }
-        }
-        
-        // Priority 4: Any audio element with src
-        if (!bestElement) {
-          for (const element of audioElements) {
-            if (element.src || element.currentSrc) {
-              console.log('Found audio element with src');
-              bestElement = element;
-              break;
-            }
-          }
-        }
-        
-        // Priority 5: First audio element as last resort
-        if (!bestElement && audioElements.length > 0) {
-          console.log('Using first audio element as fallback');
-          bestElement = audioElements[0];
-        }
-        
-        if (bestElement) {
-          console.log(`✓ Selected audio element on attempt ${attempt}:`, {
-            src: bestElement.src,
-            currentSrc: bestElement.currentSrc,
-            paused: bestElement.paused,
-            readyState: bestElement.readyState,
-            currentTime: bestElement.currentTime,
-            duration: bestElement.duration
-          });
-          return bestElement;
-        }
-      }
-      
-      // Wait before next attempt
-      if (attempt < maxAttempts) {
-        console.log(`No suitable audio element found, waiting ${delayMs}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
-    }
-    
-    console.warn('No audio element found after comprehensive search');
-    return null;
-  }, []);
 
-  // Connect Spotify player to Web Audio API
+
+  // Connect to real audio using modern tab audio capture
   const connectAudioAnalyser = useCallback(async (player?: SpotifyPlayer) => {
     try {
       // Don't initialize audio context automatically - wait for user interaction
@@ -419,149 +280,66 @@ export function useSpotifyPlayer() {
       }
 
       audioConnectionAttemptRef.current = true;
-      console.log('Attempting to connect audio analyser...');
+      console.log('Starting modern audio capture...');
 
-      // Method 1: Force Web Playback SDK to create audio element by ensuring playback
-      console.log('Forcing Web Playback SDK to create audio elements...');
-      if (player) {
-        try {
-          // Ensure the player is active and playing
-          const currentState = await player.getCurrentState();
-          if (currentState && currentState.paused) {
-            console.log('Resuming playback to force audio element creation...');
-            await player.resume();
-            // Wait a moment for the audio element to be created
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        } catch (resumeError) {
-          console.warn('Could not resume playback:', resumeError);
-        }
-      }
-
-      // Now search comprehensively for audio elements
-      console.log('Searching for audio elements after playback activation...');
-      const audioElement = await waitForAudioElement();
-
-      if (audioElement) {
-        try {
-          console.log('Attempting to connect audio element to analyser...');
+      // Method 1: Capture tab audio using getDisplayMedia (MODERN APPROACH)
+      console.log('Attempting to capture tab audio with getDisplayMedia...');
+      try {
+        if ('getDisplayMedia' in navigator.mediaDevices) {
+          // Request tab audio capture
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: false,
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              sampleRate: 44100,
+              channelCount: 2
+            } as any
+          });
           
-          // Ensure the audio element is playing
-          if (audioElement.paused) {
-            try {
-              await audioElement.play();
-            } catch (playError) {
-              console.warn('Could not play audio element:', playError);
-            }
-          }
-          
-          // Create audio source from the HTML5 audio element
-          sourceRef.current = audioContextRef.current.createMediaElementSource(audioElement);
-          
-          // Connect: source -> analyser -> destination (speakers)
-          sourceRef.current.connect(analyserRef.current);
-          analyserRef.current.connect(audioContextRef.current.destination);
-          
-          console.log('✓ Audio analyser connected successfully to real Spotify audio!');
-          
-          // Update state to reflect real audio connection
-          setState(prev => ({ ...prev, error: null }));
-          return;
-          
-        } catch (sourceError) {
-          console.warn('Failed to create media source from audio element:', sourceError);
-          // Clear the failed source reference
-          sourceRef.current = null;
-        }
-      }
-
-      console.log('No audio elements found even after comprehensive search');
-
-      // Method 2: Use Web Playback SDK with Web Audio API (modern approach)
-      console.log('Trying Web Playback SDK with Web Audio API...');
-      if (player) {
-        try {
-          // Get the player's internal audio context or create a destination
-          const playerState = await player.getCurrentState();
-          if (playerState) {
-            console.log('Player state available, attempting audio stream capture...');
+          if (stream.getAudioTracks().length > 0) {
+            console.log('✓ Got tab audio stream, connecting to analyser...');
             
-            // Try to access the SDK's internal audio stream
-            // The Web Playback SDK uses Web Audio API internally
-            const sdkAudioContext = (player as any)._options?.audioContext || audioContextRef.current;
+            // Create audio source from the captured stream
+            const source = audioContextRef.current.createMediaStreamSource(stream);
             
-            if (sdkAudioContext) {
-              console.log('Found SDK audio context, connecting analyser...');
-              
-              // Create a gain node to tap into the audio stream
-              const gainNode = sdkAudioContext.createGain();
-              gainNode.gain.value = 1.0;
-              
-              // Connect the gain node to our analyser
-              gainNode.connect(analyserRef.current);
-              analyserRef.current.connect(audioContextRef.current.destination);
-              
-              // Try to intercept the SDK's audio routing
-              const originalConnect = sdkAudioContext.destination.connect;
-              sdkAudioContext.destination.connect = function(destination: any) {
-                // Also connect to our analyser
-                gainNode.connect(analyserRef.current);
-                return originalConnect.call(this, destination);
-              };
-              
-              sourceRef.current = gainNode as any;
-              console.log('✓ Connected to Web Playback SDK audio stream!');
-              setState(prev => ({ ...prev, error: null }));
-              return;
-            }
+            // Connect: captured audio -> analyser -> speakers
+            source.connect(analyserRef.current);
+            analyserRef.current.connect(audioContextRef.current.destination);
+            
+            sourceRef.current = source;
+            
+            console.log('✓ Successfully connected to real tab audio!');
+            setState(prev => ({ 
+              ...prev, 
+              error: null 
+            }));
+            return;
           }
-          
-          // Alternative: Try to capture system audio output
-          console.log('Attempting system audio capture...');
-          if ('getDisplayMedia' in navigator.mediaDevices) {
-            try {
-              const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: false,
-                audio: {
-                  echoCancellation: false,
-                  noiseSuppression: false,
-                  autoGainControl: false,
-                  sampleRate: 44100
-                } as any
-              });
-              
-              if (stream.getAudioTracks().length > 0) {
-                const source = audioContextRef.current.createMediaStreamSource(stream);
-                source.connect(analyserRef.current);
-                analyserRef.current.connect(audioContextRef.current.destination);
-                
-                sourceRef.current = source;
-                console.log('✓ Connected to system audio via screen share!');
-                setState(prev => ({ 
-                  ...prev, 
-                  error: 'Using system audio - make sure Spotify is playing' 
-                }));
-                return;
-              }
-            } catch (displayError) {
-              console.warn('System audio capture failed:', displayError);
-            }
-          }
-          
-        } catch (sdkError) {
-          console.warn('Web Playback SDK audio connection failed:', sdkError);
+        }
+      } catch (displayError) {
+        console.warn('Tab audio capture failed:', displayError);
+        
+        // Check if user denied permission
+        if (displayError.name === 'NotAllowedError') {
+          setState(prev => ({ 
+            ...prev, 
+            error: 'Audio capture permission denied - using simulated visualization' 
+          }));
         }
       }
 
-      // Method 3: Try microphone as fallback
-      console.log('Trying microphone audio capture...');
+      // Method 2: Fallback to microphone (for testing)
+      console.log('Trying microphone as fallback...');
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ 
             audio: {
               echoCancellation: false,
               noiseSuppression: false,
-              autoGainControl: false
+              autoGainControl: false,
+              sampleRate: 44100
             } 
           });
           
@@ -569,10 +347,12 @@ export function useSpotifyPlayer() {
           source.connect(analyserRef.current);
           analyserRef.current.connect(audioContextRef.current.destination);
           
+          sourceRef.current = source;
+          
           console.log('✓ Connected to microphone audio as fallback');
           setState(prev => ({ 
             ...prev, 
-            error: 'Using microphone audio - play music loudly for visualization' 
+            error: 'Using microphone - play Spotify loudly for visualization' 
           }));
           return;
         }
@@ -580,70 +360,54 @@ export function useSpotifyPlayer() {
         console.warn('Microphone access failed:', micError);
       }
 
-      // Method 4: Fallback to enhanced simulated data
-      console.warn('All audio connection methods failed - using enhanced simulated visualization');
+      // Method 3: Fallback to simulated data
+      console.warn('All real audio methods failed - using simulated visualization');
       setState(prev => ({ 
         ...prev, 
-        error: 'Using enhanced simulated visualization based on track data' 
+        error: 'No audio access - using simulated visualization' 
       }));
 
     } catch (error) {
       console.error('Failed to connect audio analyser:', error);
       setState(prev => ({ 
         ...prev, 
-        error: 'Audio analysis unavailable - using simulated data' 
+        error: 'Audio connection failed - using simulated data' 
       }));
     } finally {
       // Reset the connection attempt flag
       audioConnectionAttemptRef.current = false;
     }
-  }, [waitForAudioElement]);
+  }, []);
 
-  // User-triggered audio activation with proper sequencing
+  // User-triggered audio activation - the key user gesture
   const activateAudio = useCallback(async () => {
-    console.log('User activated audio - starting activation sequence...');
+    console.log('🚀 User activated audio visualization...');
     
     try {
-      // Step 1: Initialize audio context
+      // Step 1: Initialize audio context (requires user gesture)
       await initializeAudioContext();
-      console.log('✓ Audio context initialized');
+      console.log('✓ Audio context ready');
       
-      // Step 2: Transfer playback if we have a device
+      // Step 2: Ensure we have an active Spotify device
       if (deviceIdRef.current) {
-        console.log('Transferring playback to Web Playback SDK...');
+        console.log('Ensuring playback is on this device...');
         const transferred = await transferPlaybackToDevice(deviceIdRef.current);
         if (transferred) {
-          console.log('✓ Playback transferred successfully');
-          
-          // Step 3: Wait a moment for Spotify to create the audio element
-          console.log('Waiting for Spotify to initialize audio element...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Step 4: Connect audio analyser
-          if (playerRef.current) {
-            console.log('Connecting audio analyser...');
-            await connectAudioAnalyser(playerRef.current);
-          }
-        } else {
-          console.warn('Playback transfer failed, trying audio connection anyway...');
-          if (playerRef.current) {
-            await connectAudioAnalyser(playerRef.current);
-          }
-        }
-      } else {
-        console.log('No device ID available, trying direct audio connection...');
-        if (playerRef.current) {
-          await connectAudioAnalyser(playerRef.current);
+          console.log('✓ This tab is now the active Spotify device');
         }
       }
       
-      console.log('Audio activation sequence completed');
+      // Step 3: Connect to real audio (this will prompt for tab audio sharing)
+      console.log('Connecting to audio stream...');
+      await connectAudioAnalyser(playerRef.current);
+      
+      console.log('✅ Audio visualization activated!');
       
     } catch (error) {
       console.error('Audio activation failed:', error);
       setState(prev => ({ 
         ...prev, 
-        error: 'Audio activation failed - using simulated data' 
+        error: 'Audio activation failed - check permissions' 
       }));
     }
   }, [initializeAudioContext, transferPlaybackToDevice, connectAudioAnalyser]);
@@ -830,17 +594,19 @@ export function useSpotifyPlayer() {
     }
   }, [state.isPlaying, state.currentTrack]);
 
-  // Get real-time audio data from Web Audio API
+  // Get real-time audio data from Web Audio API or fallback to simulated
   const updateAudioData = useCallback(() => {
-    if (analyserRef.current && state.isPlaying) {
-      // Get real frequency data from the analyser
-      const bufferLength = analyserRef.current.frequencyBinCount; // This will be 128 (fftSize/2)
+    const hasRealAudio = !!sourceRef.current && analyserRef.current;
+    
+    if (hasRealAudio && state.isPlaying) {
+      // Use real audio analysis
+      const bufferLength = analyserRef.current.frequencyBinCount; // 128 frequency bins
       const frequencies = new Uint8Array(bufferLength);
       
       try {
         analyserRef.current.getByteFrequencyData(frequencies);
         
-        // Calculate audio levels from frequency data
+        // Calculate audio levels from real frequency data
         const bassEnd = Math.floor(bufferLength * 0.1); // First 10% for bass
         const midStart = bassEnd;
         const midEnd = Math.floor(bufferLength * 0.7); // 10-70% for mids
@@ -881,12 +647,11 @@ export function useSpotifyPlayer() {
         }));
         
       } catch (error) {
-        // If real audio analysis fails, fall back to simulated data
-        console.warn('Audio analysis failed, using simulated data:', error);
+        console.warn('Real audio analysis failed, falling back to simulated:', error);
         generateSimulatedAudioData();
       }
     } else {
-      // Generate simulated data when not playing or analyser not available
+      // Use simulated data when no real audio or not playing
       generateSimulatedAudioData();
     }
 
@@ -1042,7 +807,7 @@ export function useSpotifyPlayer() {
     skipToNext,
     skipToPrevious,
     refreshTrack: fetchCurrentTrack,
-    hasRealAudio: !!sourceRef.current, // True if we have real audio connection
+    hasRealAudio: !!sourceRef.current && !!analyserRef.current, // True if we have real audio connection
     activateAudio, // Function to activate audio after user interaction
   };
 }
